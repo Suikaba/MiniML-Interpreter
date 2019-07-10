@@ -5,6 +5,7 @@ open Syntax
 %token LPAREN RPAREN SEMISEMI
 %token PLUS MULT LT
 %token IF THEN ELSE TRUE FALSE
+%token AND OR
 
 %token <int> INTV
 %token <Syntax.id> ID
@@ -18,6 +19,14 @@ toplevel :
 
 Expr :
     e=IfExpr { e }
+  | e=OrExpr { e }
+
+OrExpr :
+    l=AndExpr OR r=OrExpr { BinOp (Or, l, r) }
+  | e=AndExpr { e }
+
+AndExpr :
+    l=LTExpr AND r=AndExpr { BinOp (And, l, r) }
   | e=LTExpr { e }
 
 LTExpr :
