@@ -25,6 +25,8 @@ rule main = parse
 | "&&" { Parser.AND }
 | "||" { Parser.OR }
 
+| "(*" { comment lexbuf; main lexbuf }
+
 | ['a'-'z'] ['a'-'z' '0'-'9' '_' '\'']*
     { let id = Lexing.lexeme lexbuf in
       try
@@ -34,4 +36,9 @@ rule main = parse
      }
 | eof { exit 0 }
 
+and comment = parse
+| "(*" { comment lexbuf; comment lexbuf }
+| "*)" { () }
+| _ { comment lexbuf }
+| eof { () }
 
