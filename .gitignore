@@ -1,0 +1,12 @@
+*.cmi
+*.cmx
+*.o
+*~
+parser.ml
+parser.mli
+lexer.ml
+._d
+._ncdi
+.DS_Store
+_build
+.merlin
