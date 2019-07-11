@@ -6,7 +6,7 @@ open Syntax
 %token PLUS MINUS DIV MULT LT
 %token IF THEN ELSE TRUE FALSE
 %token AND OR
-%token LET EQ IN ANDLET
+%token LET REC EQ IN ANDLET
 %token FUN RARROW
 
 %token <int> INTV
@@ -19,6 +19,7 @@ open Syntax
 toplevel :
     e=Expr SEMISEMI { Exp e }
   | LET bs=LetBindings SEMISEMI { Decl bs }
+  | LET REC bs=LetBindings SEMISEMI { RecDecl bs }
 
 LetBindings :
     x=ID EQ e=Expr { [(x, e)] }
@@ -38,6 +39,7 @@ Expr :
 
 LetExpr :
     LET bs=LetBindings IN e2=Expr { LetExp (bs, e2) }
+  | LET REC bs=LetBindings IN e2=Expr { LetRecExp (bs, e2) }
 
 OrExpr :
     l=AndExpr OR r=OrExpr { BinOp (Or, l, r) }
@@ -48,7 +50,8 @@ AndExpr :
   | e=LTExpr { e }
 
 LTExpr :
-    l=PExpr LT r=PExpr { BinOp (Lt, l, r) }
+    l=PExpr LT r=LTExpr { BinOp (Lt, l, r) }
+  | l=PExpr EQ r=LTExpr { BinOp (Eq, l, r) }
   | e=PExpr { e }
 
 PExpr :

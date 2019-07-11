@@ -1,4 +1,5 @@
 open Eval
+open Syntax
 
 let read_ch_eval_print ic env =
   print_string "# ";
@@ -35,4 +36,8 @@ and read_eval_print env =
   else
     read_stdin_eval_print env
 
-let initial_env = Environment.empty
+(* pre-defined val *)
+let not_function =
+  ProcV ("b", IfExp (Var("b"), BLit false, BLit true), ref Environment.empty)
+
+let initial_env = Environment.extend "not" not_function Environment.empty

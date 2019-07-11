@@ -3,7 +3,7 @@ open Syntax
 type exval =
     IntV of int
   | BoolV of bool
-  | ProcV of id * exp * dnval Environment.t
+  | ProcV of id * exp * dnval Environment.t ref
 and dnval = exval
 
 exception Error of string
@@ -12,6 +12,7 @@ let err s = raise (Error s)
 
 (* errors *)
 let err_bound_several_times () = err "Variable is bound several times in this matching"
+let err_let_rec_not_allowed () = err "This kind of expression is not allowed as right-hand side of 'let rec'"
 
 (* pretty printing *)
 let rec string_of_exval = function
@@ -26,6 +27,21 @@ let pp_val v = print_string (string_of_exval v)
 let rec check_bound_several_times = function
     [] -> false
   | (id1, _) :: tl -> List.exists (fun (id2, _) -> id1 = id2) tl || check_bound_several_times tl
+
+(* checking invalid let rec *)
+let check_let_rec binds =
+  let rec check_impl name = function
+      ILit _ | BLit _ -> false
+    | Var x -> x = name
+    | BinOp (_, exp1, exp2) -> (check_impl name exp1) || (check_impl name exp2)
+    | IfExp (exp1, exp2, exp3) -> (check_impl name exp1) || (check_impl name exp2) || (check_impl name exp3)
+    | LetExp (binds, exp2) | LetRecExp (binds, exp2) ->
+        let appear = List.exists (fun (id, _) -> id = name) binds in
+        not appear && check_impl name exp2
+    | FunExp _ -> false (* todo: Is this correct ? *)
+    | AppExp (exp1, exp2) -> (check_impl name exp1) || (check_impl name exp2) in
+  let names = List.map (fun (id, _) -> id) binds in
+  List.exists (fun name -> List.exists (fun (_, exp) -> check_impl name exp) binds) names
 
 let rec apply_prim op arg1 arg2 = match op, arg1, arg2 with
     Plus, IntV i1, IntV i2 -> IntV (i1 + i2)
@@ -42,6 +58,9 @@ let rec apply_prim op arg1 arg2 = match op, arg1, arg2 with
   | And, _, _ -> err ("Both arguments must be boolean: &&")
   | Or, BoolV b1, BoolV b2 -> BoolV (b1 || b2)
   | Or, _, _ -> err ("Both arguments must be boolean: ||")
+  | Eq, IntV i1, IntV i2 -> BoolV (i1 = i2)
+  | Eq, BoolV b1, BoolV b2 -> BoolV (b1 = b2)
+  | Eq, _, _ -> err ("Both argument must have same type: =")
 
 let rec eval_exp env = function
     Var x ->
@@ -66,13 +85,24 @@ let rec eval_exp env = function
     (* then, update environment *)
     let newenv = List.fold_left (fun e (id, v) -> Environment.extend id v e) env id_vals in
     eval_exp newenv exp2
-  | FunExp (id, exp) -> ProcV (id, exp, env)
+  | LetRecExp (binds, exp2) ->
+      if check_bound_several_times binds then err_bound_several_times ();
+      if check_let_rec binds then err_let_rec_not_allowed ();
+      let dummyenv = ref Environment.empty in
+      let make_dummy_proc = function
+          FunExp (para, body) -> ProcV(para, body, dummyenv)
+        | e -> eval_exp env e in (* if e has not function, e must not contain names defined now *)
+      (* first, add all rec functions to current environment *)
+      let newenv = List.fold_left (fun env' (id, e) -> Environment.extend id (make_dummy_proc e) env') env binds in
+      dummyenv := newenv;
+      eval_exp newenv exp2
+  | FunExp (id, exp) -> ProcV (id, exp, ref env)
   | AppExp (exp1, exp2) ->
       let funval = eval_exp env exp1 in
       let arg = eval_exp env exp2 in
       (match funval with
          ProcV (id, body, env') ->
-           let newenv = Environment.extend id arg env' in
+           let newenv = Environment.extend id arg !env' in
            eval_exp newenv body
        | _ -> err ("Non-function value is applied"))
 
@@ -84,4 +114,16 @@ let eval_decl env = function
     let id_vals = List.map (fun (id, e) -> (id, eval_exp env e)) binds in
     (* then, update environment *)
     let newenv = List.fold_left (fun e (id, v) -> Environment.extend id v e) env id_vals in
+    (id_vals, newenv)
+  | RecDecl binds ->
+    if check_bound_several_times binds then err_bound_several_times ();
+    if check_let_rec binds then err_let_rec_not_allowed ();
+    let dummyenv = ref Environment.empty in
+    let make_dummy_proc = function
+        FunExp (para, body) -> ProcV(para, body, dummyenv)
+      | e -> eval_exp env e in (* if e has not function, e must not contain names defined now *)
+    (* first, add all rec functions to current environment *)
+    let newenv = List.fold_left (fun env' (id, e) -> Environment.extend id (make_dummy_proc e) env') env binds in
+    dummyenv := newenv;
+    let id_vals = List.map (fun (id, e) -> (id, eval_exp newenv e)) binds in
     (id_vals, newenv)
