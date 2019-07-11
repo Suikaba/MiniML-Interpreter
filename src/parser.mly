@@ -76,4 +76,8 @@ IfExpr :
     IF c=Expr THEN t=Expr ELSE e=Expr { IfExp (c, t, e) }
 
 FunExpr :
-    FUN x=ID RARROW e=Expr { FunExp (x, e) }
+    FUN e=FunArgsAndBody { e }
+
+FunArgsAndBody :
+    x=ID RARROW e=Expr { FunExp (x, e) }
+  | x=ID e=FunArgsAndBody { FunExp (x, e) }

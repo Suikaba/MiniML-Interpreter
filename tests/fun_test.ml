@@ -8,3 +8,6 @@ let f =
   let addx = fun y -> x + y in
   addx
 in f 4;;
+
+let f = fun x y z -> x + y + z in
+f 2 3 4;;
