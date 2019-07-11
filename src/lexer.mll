@@ -24,7 +24,9 @@ rule main = parse
 | ")" { Parser.RPAREN }
 | ";;" { Parser.SEMISEMI }
 | "+" { Parser.PLUS }
+| "-" { Parser.MINUS }
 | "*" { Parser.MULT }
+| "/" { Parser.DIV }
 | "<" { Parser.LT }
 | "=" { Parser.EQ }
 | "&&" { Parser.AND }

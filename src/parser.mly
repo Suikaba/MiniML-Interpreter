@@ -3,7 +3,7 @@ open Syntax
 %}
 
 %token LPAREN RPAREN SEMISEMI
-%token PLUS MULT LT
+%token PLUS MINUS DIV MULT LT
 %token IF THEN ELSE TRUE FALSE
 %token AND OR
 %token LET EQ IN ANDLET
@@ -53,10 +53,12 @@ LTExpr :
 
 PExpr :
     l=PExpr PLUS r=MExpr { BinOp (Plus, l, r) }
+  | l=PExpr MINUS r=MExpr { BinOp (Minus, l, r) }
   | e=MExpr { e }
 
 MExpr :
     l=MExpr MULT r=AppExpr { BinOp (Mult, l, r) }
+  | l=MExpr DIV r=AppExpr { BinOp (Div, l, r) }
   | e=AppExpr { e }
 
 AppExpr :
