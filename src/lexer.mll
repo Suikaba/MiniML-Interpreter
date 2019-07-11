@@ -9,6 +9,7 @@ let reservedWords = [
   ("in", Parser.IN);
   ("let", Parser.LET);
   ("and", Parser.ANDLET);
+  ("fun", Parser.FUN);
 ]
 }
 
@@ -28,6 +29,7 @@ rule main = parse
 | "=" { Parser.EQ }
 | "&&" { Parser.AND }
 | "||" { Parser.OR }
+| "->" { Parser.RARROW }
 
 | "(*" { comment lexbuf; main lexbuf }
 

@@ -7,6 +7,7 @@ open Syntax
 %token IF THEN ELSE TRUE FALSE
 %token AND OR
 %token LET EQ IN ANDLET
+%token FUN RARROW
 
 %token <int> INTV
 %token <Syntax.id> ID
@@ -27,6 +28,7 @@ Expr :
     e=IfExpr { e }
   | e=LetExpr { e }
   | e=OrExpr { e }
+  | e=FunExpr { e }
 
 LetExpr :
     LET bs=LetBindings IN e2=Expr { LetExp (bs, e2) }
@@ -48,7 +50,11 @@ PExpr :
   | e=MExpr { e }
 
 MExpr :
-    l=MExpr MULT r=AExpr { BinOp (Mult, l, r) }
+    l=MExpr MULT r=AppExpr { BinOp (Mult, l, r) }
+  | e=AppExpr { e }
+
+AppExpr :
+    e1=AppExpr e2=AExpr { AppExp (e1, e2) }
   | e=AExpr { e }
 
 AExpr :
@@ -60,3 +66,6 @@ AExpr :
 
 IfExpr :
     IF c=Expr THEN t=Expr ELSE e=Expr { IfExp (c, t, e) }
+
+FunExpr :
+    FUN x=ID RARROW e=Expr { FunExp (x, e) }
