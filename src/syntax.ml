@@ -24,3 +24,11 @@ type ty =
   | TyVar of tyvar
   | TyFun of ty * ty
   | TyList of ty
+
+
+(* helper functions for parser *)
+
+(* let {rec} id <args> = exp -> let {rec} id = fun <args> -> exp *)
+let rec make_fun_exp exp = function
+    [] -> exp
+  | hd :: tl -> FunExp (hd, make_fun_exp exp tl)

@@ -22,7 +22,13 @@ toplevel :
 
 LetBindings :
     x=ID EQ e=Expr { [(x, e)] }
+  | x=ID ps=Parameters EQ e=Expr { [(x, make_fun_exp e ps)] }
   | x=ID EQ e=Expr ANDLET bs=LetBindings { (x, e) :: bs }
+  | x=ID ps=Parameters EQ e=Expr ANDLET bs=LetBindings { (x, make_fun_exp e ps) :: bs }
+
+Parameters :
+    x=ID { [x] }
+  | x=ID ps=Parameters { x :: ps }
 
 Expr :
     e=IfExpr { e }
