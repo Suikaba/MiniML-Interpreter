@@ -4,10 +4,10 @@ let read_ch_eval_print ic env =
   print_string "# ";
   flush stdout;
   let decl = Parser.toplevel Lexer.main ic in
-  let (id, newenv, v) = eval_decl env decl in
-  Printf.printf "val %s = " id;
-  pp_val v;
-  print_newline();
+  let (id_vals, newenv) = eval_decl env decl in
+  List.iter (fun (id, v) -> Printf.printf "val %s = " id;
+                            pp_val v; print_newline ();)
+            id_vals;
   newenv
 
 let rec read_stdin_eval_print env =
