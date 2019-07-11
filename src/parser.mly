@@ -63,6 +63,14 @@ AExpr :
   | FALSE  { BLit false }
   | i=ID   { Var i }
   | LPAREN e=Expr RPAREN { e }
+  | e=InfixFunExpr { e }
+
+InfixFunExpr :
+    LPAREN PLUS RPAREN { FunExp ("x", FunExp ("y", BinOp (Plus, Var "x", Var "y"))) }
+  | LPAREN MULT RPAREN { FunExp ("x", FunExp ("y", BinOp (Mult, Var "x", Var "y"))) }
+  | LPAREN LT RPAREN { FunExp ("x", FunExp ("y", BinOp (Lt, Var "x", Var "y"))) }
+  | LPAREN AND RPAREN { FunExp ("x", FunExp ("y", BinOp (And, Var "x", Var "y"))) }
+  | LPAREN OR RPAREN { FunExp ("x", FunExp ("y", BinOp (Or, Var "x", Var "y"))) }
 
 IfExpr :
     IF c=Expr THEN t=Expr ELSE e=Expr { IfExp (c, t, e) }
