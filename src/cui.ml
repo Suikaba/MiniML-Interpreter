@@ -1,43 +1,50 @@
 open Eval
 open Syntax
+open Typing
 
-let read_ch_eval_print ic env =
+let read_ch_eval_print ~ic:ic ~env:env ~tyenv:tyenv =
   print_string "# ";
   flush stdout;
   let decl = Parser.toplevel Lexer.main ic in
+  let (tys, newtyenv) = ty_decl tyenv decl in
   let (id_vals, newenv) = eval_decl env decl in
-  List.iter (fun (id, v) -> Printf.printf "val %s = " id;
-                            pp_val v; print_newline ();)
-            id_vals;
-  newenv
+  let id_val_tys = List.map2 (fun (id, v) (_, ty) -> (id, v, ty)) id_vals tys in
+  List.iter (fun (id, v, ty) -> Printf.printf "val %s : " id;
+                                pp_ty ty;
+                                print_string " = ";
+                                pp_val v; print_newline ();)
+            id_val_tys;
+  newenv, newtyenv
 
-let rec read_stdin_eval_print env =
+let rec read_stdin_eval_print ~env:env ~tyenv:tyenv =
   try
     let ic = Lexing.from_channel stdin in
-    let newenv = read_ch_eval_print ic env in
-    read_stdin_eval_print newenv
-  with e -> err_handler env e
-and read_file_eval_print fp ic env =
+    let (newenv, newtyenv) = read_ch_eval_print ~ic:ic ~env:env ~tyenv:tyenv in
+    read_stdin_eval_print ~env:newenv ~tyenv:newtyenv
+  with e -> err_handler env tyenv e
+and read_file_eval_print fp ic env tyenv =
   try
-    let newenv = read_ch_eval_print ic env in
-    read_file_eval_print fp ic newenv
-  with e -> close_in fp; err_handler env e
-and err_handler env = function
-    Error msg -> print_endline msg; read_stdin_eval_print env
-  | Failure msg -> print_endline msg; read_stdin_eval_print env
-  | _ -> print_endline "Fatal error"; read_stdin_eval_print env
-and read_eval_print env =
+    let newenv, newtyenv = read_ch_eval_print ~ic:ic ~env:env ~tyenv:tyenv in
+    read_file_eval_print fp ic newenv newtyenv
+  with e -> close_in fp; err_handler env tyenv e
+and err_handler env tyenv = function
+    Error msg -> print_endline msg; read_stdin_eval_print ~env:env ~tyenv:tyenv
+  | Failure msg -> print_endline msg; read_stdin_eval_print ~env:env ~tyenv:tyenv
+  | _ -> print_endline "Fatal error"; read_stdin_eval_print ~env:env ~tyenv:tyenv
+and read_eval_print env tyenv =
   if Array.length Sys.argv > 1 then
     try
       let fp = open_in Sys.argv.(1) in
       let ic = Lexing.from_channel fp in
-      read_file_eval_print fp ic env
-    with Sys_error msg -> print_endline msg; read_stdin_eval_print env
+      read_file_eval_print fp ic env tyenv
+    with Sys_error msg -> print_endline msg; read_stdin_eval_print ~env:env ~tyenv:tyenv
   else
-    read_stdin_eval_print env
+    read_stdin_eval_print ~env:env ~tyenv:tyenv
 
 (* pre-defined val *)
 let not_function =
   ProcV ("b", IfExp (Var("b"), BLit false, BLit true), ref Environment.empty)
+(* @todo: implement not type *)
 
 let initial_env = Environment.extend "not" not_function Environment.empty
+let initial_tyenv = Environment.empty

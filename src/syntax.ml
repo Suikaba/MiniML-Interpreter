@@ -27,6 +27,11 @@ type ty =
   | TyFun of ty * ty
   | TyList of ty
 
+let pp_ty = function
+    TyInt -> print_string "int"
+  | TyBool -> print_string "bool"
+  | _ -> print_string "Not implemented"
+
 
 (* helper functions for parser *)
 
