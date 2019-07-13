@@ -28,7 +28,7 @@ and read_file_eval_print fp ic env tyenv =
     read_file_eval_print fp ic newenv newtyenv
   with e -> close_in fp; err_handler env tyenv e
 and err_handler env tyenv = function
-    Error msg -> print_endline msg; read_stdin_eval_print ~env:env ~tyenv:tyenv
+  | Error msg -> print_endline msg; read_stdin_eval_print ~env:env ~tyenv:tyenv
   | Failure msg -> print_endline msg; read_stdin_eval_print ~env:env ~tyenv:tyenv
   | _ -> print_endline "Fatal error"; read_stdin_eval_print ~env:env ~tyenv:tyenv
 and read_eval_print env tyenv =

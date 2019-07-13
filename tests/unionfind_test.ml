@@ -34,7 +34,12 @@ let union_find_test _ =
   assert_equal (Unionfind.get_value t1) 0;
   assert_equal (Unionfind.get_value t2) 0;
   assert_equal (Unionfind.get_value t3) 0;
-  assert_equal (Unionfind.get_value t4) 0
+  assert_equal (Unionfind.get_value t4) 0;
+  Unionfind.set_value t1 1;
+  assert_equal (Unionfind.get_value t1) 1;
+  assert_equal (Unionfind.get_value t2) 1;
+  assert_equal (Unionfind.get_value t3) 1;
+  assert_equal (Unionfind.get_value t4) 1
 
 let suite =
   "suite">:::["test1">:: union_find_test]

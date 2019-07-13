@@ -6,4 +6,7 @@
 )
 (library
   (name miniml)
+  (libraries
+    core
+  )
 )

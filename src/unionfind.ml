@@ -37,6 +37,7 @@ let root t = match (representitive t).parent with
   | _ -> failwith "Unionfind structure is broken"
 
 let get_value t = (root t).value
+let set_value t v = (root t).value <- v
 
 let is_same t1 t2 = (root t1) == (root t2)
 
