@@ -17,31 +17,34 @@ let compress t =
     | Parent t' -> compress_impl t' (t :: path)
   in compress_impl t []
 
-(* get representitive (, and at the same time, compress path from t to root *)
-(* @return : (compressed t, representitive) *)
+(* get root 'node' (, and at the same time, compress path from t to root *)
+(* @return : root node *)
 let representitive t =
   compress t;
   match t.parent with
-      Root r -> (t, r)
+      Root _ -> t
     | Parent p ->
         match p.parent with
-          Root r -> (t, r)
+          Root _ -> p
         | Parent _ -> failwith "Unionfind: Failed to compress"
 
-let root t = snd (representitive t)
+(* get root *)
+let root t = match (representitive t).parent with
+  | Root r -> r
+  | _ -> failwith "Unionfind structure is broken"
 
 let is_same t1 t2 = (root t1) == (root t2)
 
 let union t1 t2 =
-  let (t1, r1) = representitive t1 in
-  let (t2, r2) = representitive t2 in
+  let r1 = representitive t1 in
+  let r2 = representitive t2 in
   if r1 == r2 then ()
   else
-    let rank1 = r1.rank in
-    let rank2 = r2.rank in
-    if rank1 < rank2 then
-      t1.parent <- Parent t2
+    let rt1 = root r1 in
+    let rt2 = root r2 in
+    if rt1.rank < rt2.rank then
+      r1.parent <- Parent r2
     else begin
-      t2.parent <- Parent t1;
-      if rank1 = rank2 then r1.rank <- r1.rank + 1;
+      r2.parent <- Parent r1;
+      if rt1.rank = rt2.rank then rt1.rank <- rt1.rank + 1;
     end
