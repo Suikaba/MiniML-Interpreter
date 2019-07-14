@@ -41,10 +41,7 @@ let set_value t v = (root t).value <- v
 
 let is_same t1 t2 = (root t1) == (root t2)
 
-(*
- * @param merge_f : new root value function when merge r1 and r2
- *)
-let union t1 t2 merge_f =
+let union ?(merge_f = (fun x _ -> x)) t1 t2 =
   let r1 = representitive t1 in
   let r2 = representitive t2 in
   if r1 == r2 then ()
