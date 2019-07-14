@@ -123,14 +123,25 @@ let rec ty_exp tyenv = function
   | LetExp (binds, exp2) ->
       let (s1, newtyenv) =
         List.fold_left binds ~init:(IM.empty, tyenv)
-                     ~f:(fun (s, env') (id, exp1) ->
-                           let (s', ty) = ty_exp tyenv exp1 in
-                           (merge_subst s s', Environment.extend id ty env'))
+          ~f:(fun (s, env') (id, exp1) ->
+                let (s', ty) = ty_exp tyenv exp1 in
+                (merge_subst s s', Environment.extend id ty env'))
       in
       let (s2, tyans) = ty_exp newtyenv exp2 in
       let newsubst = merge_subst s1 s2 in
       (newsubst, subst_type newsubst tyans)
-  | LetRecExp (binds, exp2) -> err "Not implemented"
+  | LetRecExp (binds, exp2) ->
+      let newenv = List.fold_right binds ~init:tyenv
+                     ~f:(fun (id, _) env' -> Environment.extend id (TyVar (fresh_tyvar ())) env')
+      in
+      let s1 = List.fold_right binds ~init:IM.empty
+                 ~f:(fun (id, e) s' ->
+                       let (s'', ty'') = ty_exp newenv e in
+                       unify (merge_subst s' s'') [(Environment.lookup id newenv), ty''])
+      in
+      let (s2, tyans) = ty_exp newenv exp2 in
+      let s = merge_subst s1 s2 in
+      (s, subst_type s tyans)
   | FunExp (id, exp) ->
       let domty = TyVar (fresh_tyvar ()) in
       let s, ranty = ty_exp (Environment.extend id domty tyenv) exp in
@@ -145,10 +156,19 @@ let ty_decl tyenv = function
     Exp e -> (["-", snd (ty_exp tyenv e)], tyenv)
   | Decl binds ->
       let id_tys = List.map binds
-                            ~f:(fun (id, e) ->
-                                  let (_, ty) = ty_exp tyenv e in
-                                  (id, ty))
+                     ~f:(fun (id, e) ->
+                           let (_, ty) = ty_exp tyenv e in
+                           (id, ty))
       in
       let newenv = List.fold_left id_tys ~init:tyenv ~f:(fun env' (id, ty) -> Environment.extend id ty env')
       in (id_tys, newenv)
-  | RecDecl binds -> err "Not implemented"
+  | RecDecl binds ->
+      let tmpenv = List.fold_left binds ~init:tyenv
+                     ~f:(fun env' (id, _) -> Environment.extend id (TyVar (fresh_tyvar ())) env')
+      in
+      let id_tys = List.map binds ~f:(fun (id, e) -> (id, ty_exp tmpenv e)) in
+      let subst = List.fold_left id_tys ~init:IM.empty ~f:(fun s (_, (s', _)) -> merge_subst s s') in
+      List.fold_right id_tys ~init:([], tyenv)
+        ~f:(fun (id, (_, ty)) (id_tys', env') ->
+              let ty = subst_type subst ty in
+              ((id, ty) :: id_tys', Environment.extend id ty env'))
