@@ -28,6 +28,11 @@ type ty =
   | TyFun of ty * ty
   | TyList of ty
 
+type tysc = TyScheme of tyvar list * ty
+
+let tysc_of_ty ty = TyScheme ([], ty)
+
+
 module ST = Set.Make(Int)
 
 let rec pp_ty = function
@@ -48,11 +53,21 @@ let fresh_tyvar =
   let body () = counter := !counter + 1; !counter in
   body
 
-let rec free_ty_vars = function
+let rec freevar_ty = function
   | TyInt | TyBool -> ST.empty
   | TyVar v -> ST.singleton v
-  | TyFun (ty1, ty2) -> ST.union (free_ty_vars ty1) (free_ty_vars ty2)
+  | TyFun (ty1, ty2) -> ST.union (freevar_ty ty1) (freevar_ty ty2)
   | TyList _ -> failwith "Not implemented"
+
+let freevar_tysc tysc =
+  let rec freevar_tysc_impl binds = (function
+    | TyInt | TyBool -> ST.empty
+    | TyVar v -> if List.exists binds ~f:(fun v' -> v = v') then ST.empty else ST.singleton v
+    | TyFun (ty1, ty2) -> ST.union (freevar_tysc_impl binds ty1) (freevar_tysc_impl binds ty2)
+    | TyList _ -> failwith "Not implemented")
+  in
+  match tysc with
+  | TyScheme (binds, ty) -> freevar_tysc_impl binds ty
 
 (* helper functions for parser *)
 
