@@ -44,7 +44,7 @@ and read_eval_print env tyenv =
 (* pre-defined val *)
 let not_function =
   ProcV ("b", IfExp (Var("b"), BLit false, BLit true), ref Environment.empty)
-(* @todo: implement not type *)
+let not_ty = TyFun (TyBool, TyBool)
 
 let initial_env = Environment.extend "not" not_function Environment.empty
-let initial_tyenv = Environment.empty
+let initial_tyenv = Environment.extend "not" (tysc_of_ty not_ty) Environment.empty
