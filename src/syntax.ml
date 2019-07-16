@@ -6,6 +6,7 @@ type binOp = Plus | Minus | Mult | Div | Lt | And | Or | Eq
 
 type exp =
     Var of id
+  | UnitLit
   | ILit of int
   | BLit of bool
   | BinOp of binOp * exp * exp
@@ -14,6 +15,7 @@ type exp =
   | LetRecExp of (id * exp) list * exp
   | FunExp of id * exp
   | AppExp of exp * exp
+  | UnitSeqExp of exp * exp
 
 type program =
     Exp of exp
@@ -22,7 +24,8 @@ type program =
 
 type tyvar = int
 type ty =
-    TyInt
+    TyUnit
+  | TyInt
   | TyBool
   | TyVar of tyvar
   | TyFun of ty * ty
@@ -36,6 +39,7 @@ let tysc_of_ty ty = TyScheme ([], ty)
 module ST = Set.Make(Int)
 
 let rec pp_ty = function
+    TyUnit -> print_string "unit"
   | TyInt -> print_string "int"
   | TyBool -> print_string "bool"
   | TyVar v -> Printf.printf "v%d" v
@@ -54,14 +58,14 @@ let fresh_tyvar =
   body
 
 let rec freevar_ty = function
-  | TyInt | TyBool -> ST.empty
+  | TyUnit | TyInt | TyBool -> ST.empty
   | TyVar v -> ST.singleton v
   | TyFun (ty1, ty2) -> ST.union (freevar_ty ty1) (freevar_ty ty2)
   | TyList _ -> failwith "Not implemented"
 
 let freevar_tysc tysc =
   let rec freevar_tysc_impl binds = (function
-    | TyInt | TyBool -> ST.empty
+    | TyUnit | TyInt | TyBool -> ST.empty
     | TyVar v -> if List.exists binds ~f:(fun v' -> v = v') then ST.empty else ST.singleton v
     | TyFun (ty1, ty2) -> ST.union (freevar_tysc_impl binds ty1) (freevar_tysc_impl binds ty2)
     | TyList _ -> failwith "Not implemented")

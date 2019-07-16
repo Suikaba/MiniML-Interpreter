@@ -127,6 +127,7 @@ let rec ty_exp tyenv = function
        with Environment.Not_bound -> err ("Variable not bound: " ^ x))
   | ILit _ -> (IM.empty, TyInt)
   | BLit _ -> (IM.empty, TyBool)
+  | UnitLit -> (IM.empty, TyUnit)
   | BinOp (op, exp1, exp2) ->
       let (s1, tyarg1) = ty_exp tyenv exp1 in
       let (s2, tyarg2) = ty_exp tyenv exp2 in
@@ -178,6 +179,12 @@ let rec ty_exp tyenv = function
       let tybody = TyVar (fresh_tyvar ()) in
       let newsubst = unify (merge_subst s1 s2) [(tyf, TyFun (tyarg, tybody))] in
       (newsubst, subst_type newsubst tybody)
+  | UnitSeqExp (exp1, exp2) ->
+      let (s1, ty1) = ty_exp tyenv exp1 in
+      if ty1 <> TyUnit then print_endline "Warning: this expression should have type unit.";
+      let (s2, ty2) = ty_exp tyenv exp2 in
+      (merge_subst s1 s2, ty2)
+
 let ty_decl tyenv = function
     Exp e -> (["-", snd (ty_exp tyenv e)], tyenv)
   | Decl binds ->

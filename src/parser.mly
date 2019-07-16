@@ -2,7 +2,7 @@
 open Syntax
 %}
 
-%token LPAREN RPAREN SEMISEMI
+%token LPAREN RPAREN SEMI SEMISEMI
 %token PLUS MINUS DIV MULT LT
 %token IF THEN ELSE TRUE FALSE
 %token AND OR
@@ -34,12 +34,16 @@ Parameters :
 Expr :
     e=IfExpr { e }
   | e=LetExpr { e }
-  | e=OrExpr { e }
+  | e=SeqExpr { e }
   | e=FunExpr { e }
 
 LetExpr :
     LET bs=LetBindings IN e2=Expr { LetExp (bs, e2) }
   | LET REC bs=LetBindings IN e2=Expr { LetRecExp (bs, e2) }
+
+SeqExpr :
+    l=OrExpr SEMI r=SeqExpr { UnitSeqExp (l, r) }
+  | e=OrExpr { e }
 
 OrExpr :
     l=AndExpr OR r=OrExpr { BinOp (Or, l, r) }
@@ -72,6 +76,7 @@ AExpr :
     i=INTV { ILit i }
   | TRUE   { BLit true }
   | FALSE  { BLit false }
+  | LPAREN RPAREN { UnitLit }
   | i=ID   { Var i }
   | LPAREN e=Expr RPAREN { e }
   | e=InfixFunExpr { e }

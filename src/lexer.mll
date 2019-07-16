@@ -23,6 +23,7 @@ rule main = parse
 
 | "(" { Parser.LPAREN }
 | ")" { Parser.RPAREN }
+| ";" { Parser.SEMI }
 | ";;" { Parser.SEMISEMI }
 | "+" { Parser.PLUS }
 | "-" { Parser.MINUS }

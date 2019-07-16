@@ -2,6 +2,7 @@ open Syntax
 
 type exval =
     IntV of int
+  | UnitV
   | BoolV of bool
   | ProcV of id * exp * dnval Environment.t ref
 and dnval = exval
@@ -17,6 +18,7 @@ let err_let_rec_not_allowed () = err "This kind of expression is not allowed as 
 (* pretty printing *)
 let rec string_of_exval = function
     IntV i -> string_of_int i
+  | UnitV -> "()"
   | BoolV b -> string_of_bool b
   | ProcV (_, _, _) -> "<fun>"
 
@@ -31,7 +33,7 @@ let rec check_bound_several_times = function
 (* checking invalid let rec *)
 let check_let_rec binds =
   let rec check_impl name = function
-      ILit _ | BLit _ -> false
+      ILit _ | BLit _ | UnitLit -> false
     | Var x -> x = name
     | BinOp (_, exp1, exp2) -> (check_impl name exp1) || (check_impl name exp2)
     | IfExp (exp1, exp2, exp3) -> (check_impl name exp1) || (check_impl name exp2) || (check_impl name exp3)
@@ -39,7 +41,9 @@ let check_let_rec binds =
         let appear = List.exists (fun (id, _) -> id = name) binds in
         not appear && check_impl name exp2
     | FunExp _ -> false (* todo: Is this correct ? *)
-    | AppExp (exp1, exp2) -> (check_impl name exp1) || (check_impl name exp2) in
+    | AppExp (exp1, exp2) -> (check_impl name exp1) || (check_impl name exp2)
+    | UnitSeqExp (exp1, exp2) -> (check_impl name exp1) || (check_impl name exp2)
+  in
   let names = List.map (fun (id, _) -> id) binds in
   List.exists (fun name -> List.exists (fun (_, exp) -> check_impl name exp) binds) names
 
@@ -68,6 +72,7 @@ let rec eval_exp env = function
        Environment.Not_bound -> err ("Variable not bound: " ^ x))
   | ILit i -> IntV i
   | BLit b -> BoolV b
+  | UnitLit -> UnitV
   | BinOp (op, exp1, exp2) ->
     let arg1 = eval_exp env exp1 in
     let arg2 = eval_exp env exp2 in
@@ -105,6 +110,9 @@ let rec eval_exp env = function
            let newenv = Environment.extend id arg !env' in
            eval_exp newenv body
        | _ -> err ("Non-function value is applied"))
+  | UnitSeqExp (exp1, exp2) ->
+      let _ = eval_exp env exp1 in
+      eval_exp env exp2
 
 let eval_decl env = function
     Exp e -> let v = eval_exp env e in ([("-", v)], env)
