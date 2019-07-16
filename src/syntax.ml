@@ -2,7 +2,7 @@
 open Core
 type id = string
 
-type binOp = Plus | Minus | Mult | Div | Lt | And | Or | Eq
+type binOp = Plus | Minus | Mult | Div | Lt | And | Or | Eq | Assign
 
 type exp =
     Var of id
@@ -16,6 +16,8 @@ type exp =
   | FunExp of id * exp
   | AppExp of exp * exp
   | UnitSeqExp of exp * exp
+  | RefExp of exp
+  | DerefExp of exp
 
 type program =
     Exp of exp
@@ -30,6 +32,7 @@ type ty =
   | TyVar of tyvar
   | TyFun of ty * ty
   | TyList of ty
+  | TyRef of ty
 
 type tysc = TyScheme of tyvar list * ty
 
@@ -50,6 +53,7 @@ let rec pp_ty = function
                          print_string ") -> ";
                          pp_ty ty2
        | _ -> pp_ty ty1; print_string " -> "; pp_ty ty2)
+  | TyRef ty -> pp_ty ty; print_string " ref"
   | _ -> print_string "Not implemented"
 
 let fresh_tyvar =
@@ -61,6 +65,7 @@ let rec freevar_ty = function
   | TyUnit | TyInt | TyBool -> ST.empty
   | TyVar v -> ST.singleton v
   | TyFun (ty1, ty2) -> ST.union (freevar_ty ty1) (freevar_ty ty2)
+  | TyRef ty -> freevar_ty ty
   | TyList _ -> failwith "Not implemented"
 
 let freevar_tysc tysc =
@@ -68,6 +73,7 @@ let freevar_tysc tysc =
     | TyUnit | TyInt | TyBool -> ST.empty
     | TyVar v -> if List.exists binds ~f:(fun v' -> v = v') then ST.empty else ST.singleton v
     | TyFun (ty1, ty2) -> ST.union (freevar_tysc_impl binds ty1) (freevar_tysc_impl binds ty2)
+    | TyRef ty -> freevar_tysc_impl binds ty
     | TyList _ -> failwith "Not implemented")
   in
   match tysc with

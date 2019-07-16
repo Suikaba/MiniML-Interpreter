@@ -34,6 +34,8 @@ rule main = parse
 | "&&" { Parser.AND }
 | "||" { Parser.OR }
 | "->" { Parser.RARROW }
+| "!" { Parser.EXCLA }
+| ":=" { Parser.COLONEQ }
 
 | "(*" { comment lexbuf; main lexbuf }
 

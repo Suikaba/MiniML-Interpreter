@@ -28,7 +28,8 @@ and read_file_eval_print fp ic env tyenv =
     read_file_eval_print fp ic newenv newtyenv
   with e -> close_in fp; err_handler env tyenv e
 and err_handler env tyenv = function
-  | Error msg -> print_endline msg; read_stdin_eval_print ~env:env ~tyenv:tyenv
+  | Typing.Error msg -> print_endline msg; read_stdin_eval_print ~env:env ~tyenv:tyenv
+  | Eval.Error msg -> print_endline msg; read_stdin_eval_print ~env:env ~tyenv:tyenv
   | Failure msg -> print_endline msg; read_stdin_eval_print ~env:env ~tyenv:tyenv
   | _ -> print_endline "Fatal error"; read_stdin_eval_print ~env:env ~tyenv:tyenv
 and read_eval_print env tyenv =
@@ -46,5 +47,15 @@ let not_function =
   ProcV ("b", IfExp (Var("b"), BLit false, BLit true), ref Environment.empty)
 let not_ty = TyFun (TyBool, TyBool)
 
-let initial_env = Environment.extend "not" not_function Environment.empty
-let initial_tyenv = Environment.extend "not" (tysc_of_ty not_ty) Environment.empty
+let ref_function = ProcV ("v", RefExp (Var "v"), ref Environment.empty)
+let ref_tysc =
+  let var = fresh_tyvar () in
+  let tyvar = TyVar var in
+  TyScheme ([var], TyFun (tyvar, TyRef tyvar))
+
+let initial_env =
+  Environment.extend "not" not_function
+    (Environment.extend "ref" ref_function Environment.empty)
+let initial_tyenv =
+  Environment.extend "not" (tysc_of_ty not_ty)
+    (Environment.extend "ref" ref_tysc Environment.empty)

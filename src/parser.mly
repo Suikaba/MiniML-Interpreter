@@ -8,6 +8,7 @@ open Syntax
 %token AND OR
 %token LET REC EQ IN ANDLET
 %token FUN RARROW
+%token EXCLA COLONEQ
 
 %token <int> INTV
 %token <Syntax.id> ID
@@ -42,7 +43,11 @@ LetExpr :
   | LET REC bs=LetBindings IN e2=Expr { LetRecExp (bs, e2) }
 
 SeqExpr :
-    l=OrExpr SEMI r=SeqExpr { UnitSeqExp (l, r) }
+    l=AssignExpr SEMI r=SeqExpr { UnitSeqExp (l, r) }
+  | e=AssignExpr { e }
+
+AssignExpr :
+    l=OrExpr COLONEQ r=AssignExpr { BinOp (Assign, l, r) }
   | e=OrExpr { e }
 
 OrExpr :
@@ -69,7 +74,11 @@ MExpr :
   | e=AppExpr { e }
 
 AppExpr :
-    e1=AppExpr e2=AExpr { AppExp (e1, e2) }
+    e1=AppExpr e2=DerefExpr { AppExp (e1, e2) }
+  | e=DerefExpr { e }
+
+DerefExpr :
+    EXCLA e=AExpr { DerefExp e }
   | e=AExpr { e }
 
 AExpr :

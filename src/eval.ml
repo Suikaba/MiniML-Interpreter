@@ -5,6 +5,7 @@ type exval =
   | UnitV
   | BoolV of bool
   | ProcV of id * exp * dnval Environment.t ref
+  | RefV of exval ref
 and dnval = exval
 
 exception Error of string
@@ -21,6 +22,7 @@ let rec string_of_exval = function
   | UnitV -> "()"
   | BoolV b -> string_of_bool b
   | ProcV (_, _, _) -> "<fun>"
+  | RefV v -> "{contents = " ^ (string_of_exval !v) ^ "}"
 
 let pp_val v = print_string (string_of_exval v)
 
@@ -43,6 +45,7 @@ let check_let_rec binds =
     | FunExp _ -> false (* todo: Is this correct ? *)
     | AppExp (exp1, exp2) -> (check_impl name exp1) || (check_impl name exp2)
     | UnitSeqExp (exp1, exp2) -> (check_impl name exp1) || (check_impl name exp2)
+    | _ -> err "check_let_rec: Not implemented"
   in
   let names = List.map (fun (id, _) -> id) binds in
   List.exists (fun name -> List.exists (fun (_, exp) -> check_impl name exp) binds) names
@@ -65,6 +68,8 @@ let rec apply_prim op arg1 arg2 = match op, arg1, arg2 with
   | Eq, IntV i1, IntV i2 -> BoolV (i1 = i2)
   | Eq, BoolV b1, BoolV b2 -> BoolV (b1 = b2)
   | Eq, _, _ -> err ("Both argument must have same type: =")
+  | Assign, RefV r, arg2 -> r := arg2; UnitV
+  | Assign, _, _ -> err "Must have reference type"
 
 let rec eval_exp env = function
     Var x ->
@@ -113,6 +118,13 @@ let rec eval_exp env = function
   | UnitSeqExp (exp1, exp2) ->
       let _ = eval_exp env exp1 in
       eval_exp env exp2
+  | RefExp exp ->
+      let v = eval_exp env exp in
+      RefV (ref v)
+  | DerefExp exp ->
+      (match eval_exp env exp with
+       | RefV r -> !r
+       | _ -> err "Eval/DerefExp: Non-reference type is dereferenced")
 
 let eval_decl env = function
     Exp e -> let v = eval_exp env e in ([("-", v)], env)

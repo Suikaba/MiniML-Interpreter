@@ -36,6 +36,7 @@ let rec subst_type s = function
      | None -> TyVar v)
   | TyFun (ty1, ty2) -> TyFun (subst_type s ty1, subst_type s ty2)
   | TyList _ -> failwith "Not implemented"
+  | TyRef ty -> TyRef (subst_type s ty)
   | t -> t
 
 (* t1 -> forall a_1, ..., a_k.t1 *)
@@ -68,6 +69,8 @@ let rec unify subst eqs =
     let subst = extend (extend subst ty1) ty2 in
     let unify_root ty1 ty2 =
       (match ty1, ty2 with
+      | TyInt, TyInt -> unify subst tl
+      | TyBool, TyBool -> unify subst tl
       | TyVar v1, TyVar v2 ->
           UF.union (find_uf subst v1) (find_uf subst v2);
           unify subst tl
@@ -77,8 +80,7 @@ let rec unify subst eqs =
           unify subst tl
       | TyFun (ty11, ty12), TyFun (ty21, ty22) ->
           unify subst ((ty11, ty21) :: (ty12, ty22) :: tl)
-      | TyBool, TyBool -> unify subst tl
-      | TyInt, TyInt -> unify subst tl
+      | TyRef ty1, TyRef ty2 -> unify subst ((ty1, ty2) :: tl)
       | _ -> err "Type mismatch")
     in
     (match ty1, ty2 with
@@ -115,6 +117,7 @@ let ty_prim op ty1 ty2 = match op with
   | Lt -> ([(ty1, TyInt); (ty2, TyInt)], TyBool) (* todo *)
   | And | Or -> ([(ty1, TyBool); (ty2, TyBool)], TyBool)
   | Eq -> ([(ty1, ty2)], TyBool) (* todo *)
+  | Assign -> ([ty1, TyRef ty2], TyUnit)
 
 let rec ty_exp tyenv = function
     Var x ->
@@ -184,6 +187,12 @@ let rec ty_exp tyenv = function
       if ty1 <> TyUnit then print_endline "Warning: this expression should have type unit.";
       let (s2, ty2) = ty_exp tyenv exp2 in
       (merge_subst s1 s2, ty2)
+  | RefExp _ -> err "ty_exp: input expression has RefExp"
+  | DerefExp exp ->
+      let s, ty = ty_exp tyenv exp in
+      let tyvar = TyVar (fresh_tyvar ()) in
+      let newsubst = unify s [(ty, TyRef tyvar)] in
+      (newsubst, subst_type newsubst tyvar)
 
 let ty_decl tyenv = function
     Exp e -> (["-", snd (ty_exp tyenv e)], tyenv)
