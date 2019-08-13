@@ -19,6 +19,13 @@ type exp =
   | RefExp of exp
   | DerefExp of exp
 
+let is_value_exp = function
+  | UnitLit -> true
+  | ILit _ -> true
+  | FunExp _ -> true
+  | BLit _ -> true
+  | _ -> false
+
 type program =
     Exp of exp
   | Decl of (id * exp) list

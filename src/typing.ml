@@ -149,7 +149,12 @@ let rec ty_exp tyenv = function
         List.fold_left binds ~init:(IM.empty, tyenv)
           ~f:(fun (s, env') (id, exp1) ->
                 let (s', ty) = ty_exp tyenv exp1 in
-                let c = make_closure ~ty:ty ~tyenv:tyenv ~subst:s' in
+                let c =
+                  if is_value_exp exp1 then
+                    make_closure ~ty:ty ~tyenv:tyenv ~subst:s'
+                  else
+                    tysc_of_ty ty
+                in
                 (merge_subst s s', Environment.extend id c env'))
       in
       let (s2, tyans) = ty_exp newtyenv exp2 in
@@ -194,27 +199,46 @@ let rec ty_exp tyenv = function
       let newsubst = unify s [(ty, TyRef tyvar)] in
       (newsubst, subst_type newsubst tyvar)
 
-let ty_decl tyenv = function
-    Exp e -> (["-", snd (ty_exp tyenv e)], tyenv)
-  | Decl binds ->
-      List.fold_right ~init:([], tyenv) binds
-        ~f:(fun (id, e) (id_tys, env) ->
-              let (s, ty) = ty_exp tyenv e in
-              let tysc = make_closure ~ty:ty ~tyenv:tyenv ~subst:s in
-              ((id, ty) :: id_tys, Environment.extend id tysc env))
-  | RecDecl binds ->
-      let tmpenv = List.fold_left binds ~init:tyenv
-                     ~f:(fun env' (id, _) ->
-                           let tysc = tysc_of_ty (TyVar (fresh_tyvar ())) in
-                           Environment.extend id tysc env')
-      in
-      let (id_tys, subst) = List.fold_right binds ~init:([], IM.empty)
-                              ~f:(fun (id, e) (id_tys, s) ->
-                                    let s', ty = ty_exp tmpenv e in
-                                    ((id, ty) :: id_tys, merge_subst s s'))
-      in
-      List.fold_right id_tys ~init:([], tyenv)
-        ~f:(fun (id, ty) (id_tys', env') ->
-              let ty = subst_type subst ty in
-              let c = make_closure ~ty:ty ~tyenv:tyenv ~subst:subst in
-              ((id, ty) :: id_tys', Environment.extend id c env'))
+let ty_decl tyenv e =
+  let inner tyenv = (function
+      Exp e ->
+        let s, ty = ty_exp tyenv e in
+        (s, ["-", ty], tyenv)
+    | Decl binds ->
+        List.fold_right ~init:(IM.empty, [], tyenv) binds
+          ~f:(fun (id, e) (s', id_tys, env) ->
+                let (s, ty) = ty_exp tyenv e in
+                let tysc =
+                  if is_value_exp e then
+                    make_closure ~ty:ty ~tyenv:tyenv ~subst:s
+                  else
+                    tysc_of_ty ty
+                in
+                (merge_subst s s', (id, ty) :: id_tys, Environment.extend id tysc env))
+    | RecDecl binds -> (* dirty code *)
+        let tmpenv = List.fold_left binds ~init:tyenv
+                      ~f:(fun env' (id, _) ->
+                            let tysc = tysc_of_ty (TyVar (fresh_tyvar ())) in
+                            Environment.extend id tysc env')
+        in
+        let (id_exp_tys, subst) = List.fold_right binds ~init:([], IM.empty)
+                                    ~f:(fun (id, e) (id_tys, s) ->
+                                          let s', ty = ty_exp tmpenv e in
+                                          ((id, e, ty) :: id_tys, merge_subst s s'))
+        in
+        let (id_tys, tyenv) =
+          List.fold_right id_exp_tys ~init:([], tyenv)
+            ~f:(fun (id, e, ty) (id_tys', env') ->
+                  let ty = subst_type subst ty in
+                  let tysc =
+                    if is_value_exp e then
+                      make_closure ~ty:ty ~tyenv:tyenv ~subst:subst
+                    else
+                      tysc_of_ty ty
+                  in
+                  ((id, ty) :: id_tys', Environment.extend id tysc env'))
+        in (subst, id_tys, tyenv))
+    in
+    let s, id_tys, tyenv = inner tyenv e in
+    let newtyenv = Environment.map (fun (TyScheme (xs, ty)) -> TyScheme (xs, subst_type s ty)) tyenv in
+    (id_tys, newtyenv)
