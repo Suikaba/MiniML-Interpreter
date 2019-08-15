@@ -35,7 +35,7 @@ let rec subst_type s = function
         | ty -> subst_type s ty)
      | None -> TyVar v)
   | TyFun (ty1, ty2) -> TyFun (subst_type s ty1, subst_type s ty2)
-  | TyList _ -> failwith "Not implemented"
+  | TyList ty -> TyList (subst_type s ty)
   | TyRef ty -> TyRef (subst_type s ty)
   | TyTuple tys -> TyTuple (List.map tys ~f:(fun ty -> subst_type s ty))
   | t -> t
@@ -82,6 +82,10 @@ let rec unify subst eqs =
       | TyFun (ty11, ty12), TyFun (ty21, ty22) ->
           unify subst ((ty11, ty21) :: (ty12, ty22) :: tl)
       | TyRef ty1, TyRef ty2 -> unify subst ((ty1, ty2) :: tl)
+      | TyTuple tys1, TyTuple tys2 ->
+          if (List.length tys1) <> (List.length tys2) then err "Type mismatch: Tuple";
+          unify subst ((List.zip_exn tys1 tys2) @ eqs)
+      | TyList ty1, TyList ty2 -> unify subst ((ty1, ty2) :: tl)
       | _ -> err "Type mismatch")
     in
     (match ty1, ty2 with
@@ -206,6 +210,17 @@ let rec ty_exp tyenv = function
                            (merge_subst s s', ty :: tys))
       in
       (s, TyTuple (List.map tys ~f:(fun ty -> subst_type s ty)))
+  | ListExp exps ->
+      (match exps with
+         [] -> (IM.empty, TyList (TyVar (fresh_tyvar ())))
+       | exps ->
+           let s1, ty1 = ty_exp tyenv (List.hd_exn exps) in
+           let s, eqs = List.fold_left (List.tl_exn exps) ~init:(s1, [])
+                          ~f:(fun (s', eqs') e ->
+                                let s'', ty'' = ty_exp tyenv e in
+                                (merge_subst s' s'', (ty1, ty'') :: eqs')) in
+           let s = unify s eqs in
+           (s, subst_type s ty1))
 
 let ty_decl tyenv e =
   let inner tyenv = (function

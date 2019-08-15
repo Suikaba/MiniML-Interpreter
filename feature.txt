@@ -1,0 +1,6 @@
+
+- recursive function
+- let-polymorphism
+- function type
+- tuple/list type
+- reference type (value restriction)

@@ -10,6 +10,7 @@ open Syntax
 %token FUN RARROW
 %token EXCLA COLONEQ
 %token COMMA
+%token LBOXBRA RBOXBRA
 
 %token <int> INTV
 %token <Syntax.id> ID
@@ -105,6 +106,19 @@ AExpr :
   | i=ID   { Var i }
   | LPAREN e=Expr RPAREN { e }
   | e=InfixFunExpr { e }
+  | e=ListExpr { e }
+
+ListExpr :
+    LBOXBRA RBOXBRA { ListExp [] }
+  | LBOXBRA e=ListSeqExpr RBOXBRA { ListExp e }
+
+ListSeqExpr : (* not include SeqExpr directly *)
+    e=LetExpr { [e] }
+  | e=FunExpr { [e] }
+  | e=IfExpr { [e] }
+  | l=LetExpr SEMI r=ListSeqExpr { l :: r }
+  | l=FunExpr SEMI r=ListSeqExpr { l :: r }
+  | l=IfExpr SEMI r=ListSeqExpr { l :: r }
 
 InfixFunExpr :
     LPAREN PLUS RPAREN { FunExp ("x", FunExp ("y", BinOp (Plus, Var "x", Var "y"))) }

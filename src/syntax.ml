@@ -19,6 +19,7 @@ type exp =
   | RefExp of exp
   | DerefExp of exp
   | TupleExp of exp list
+  | ListExp of exp list
 
 let is_value_exp = function
   | UnitLit -> true
@@ -66,7 +67,7 @@ let rec string_of_ty = function
                          TyFun _ | TyTuple _ -> "(" ^ (string_of_ty ty) ^ ")"
                        | _ -> string_of_ty ty)
       |> String.concat ~sep:" * "
-  | TyList _ -> failwith "List: Not implemented"
+  | TyList ty -> (string_of_ty ty) ^ " list"
 
 let pp_ty ty = print_string (string_of_ty ty)
 
@@ -81,7 +82,7 @@ let rec freevar_ty = function
   | TyFun (ty1, ty2) -> ST.union (freevar_ty ty1) (freevar_ty ty2)
   | TyRef ty -> freevar_ty ty
   | TyTuple tys -> List.fold_right tys ~init:ST.empty ~f:(fun ty fv -> ST.union fv (freevar_ty ty))
-  | TyList _ -> failwith "Not implemented"
+  | TyList ty -> freevar_ty ty
 
 let freevar_tysc tysc =
   let rec freevar_tysc_impl binds = (function
@@ -90,7 +91,7 @@ let freevar_tysc tysc =
     | TyFun (ty1, ty2) -> ST.union (freevar_tysc_impl binds ty1) (freevar_tysc_impl binds ty2)
     | TyRef ty -> freevar_tysc_impl binds ty
     | TyTuple tys -> List.fold_right tys ~init:ST.empty ~f:(fun ty fv -> ST.union fv (freevar_tysc_impl binds ty))
-    | TyList _ -> failwith "Not implemented")
+    | TyList ty -> freevar_tysc_impl binds ty)
   in
   match tysc with
   | TyScheme (binds, ty) -> freevar_tysc_impl binds ty

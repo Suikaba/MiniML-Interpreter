@@ -7,6 +7,7 @@ type exval =
   | ProcV of id * exp * dnval Environment.t ref
   | RefV of exval ref
   | TupleV of exval list
+  | ListV of exval list
 and dnval = exval
 
 exception Error of string
@@ -25,6 +26,7 @@ let rec string_of_exval = function
   | ProcV (_, _, _) -> "<fun>"
   | RefV v -> "{contents = " ^ (string_of_exval !v) ^ "}"
   | TupleV vs -> "(" ^ (List.map (fun v -> string_of_exval v) vs |> String.concat ", ") ^ ")"
+  | ListV vs -> "[" ^ (List.map (fun v -> string_of_exval v) vs |> String.concat "; ") ^ "]"
 
 let pp_val v = print_string (string_of_exval v)
 
@@ -48,6 +50,7 @@ let check_let_rec binds =
     | AppExp (exp1, exp2) -> (check_impl name exp1) || (check_impl name exp2)
     | UnitSeqExp (exp1, exp2) -> (check_impl name exp1) || (check_impl name exp2)
     | TupleExp exps -> List.exists (fun e -> check_impl name e) exps
+    | ListExp exps -> List.exists (fun e -> check_impl name e) exps
     | _ -> err "check_let_rec: Not implemented"
   in
   List.map (fun (id, _) -> id) binds
@@ -129,6 +132,7 @@ let rec eval_exp env = function
        | RefV r -> !r
        | _ -> err "Eval/DerefExp: Non-reference type is dereferenced")
   | TupleExp exps -> TupleV (List.map (fun e -> eval_exp env e) exps)
+  | ListExp exps -> ListV (List.map (fun e -> eval_exp env e) exps)
 
 let eval_decl env = function
     Exp e -> let v = eval_exp env e in ([("-", v)], env)
