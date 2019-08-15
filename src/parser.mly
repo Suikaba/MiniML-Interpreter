@@ -9,6 +9,7 @@ open Syntax
 %token LET REC EQ IN ANDLET
 %token FUN RARROW
 %token EXCLA COLONEQ
+%token COMMA
 
 %token <int> INTV
 %token <Syntax.id> ID
@@ -33,9 +34,8 @@ Parameters :
   | x=ID ps=Parameters { x :: ps }
 
 Expr :
-    e=IfExpr { e }
+    e=SeqExpr { e }
   | e=LetExpr { e }
-  | e=SeqExpr { e }
   | e=FunExpr { e }
 
 LetExpr :
@@ -43,12 +43,28 @@ LetExpr :
   | LET REC bs=LetBindings IN e2=Expr { LetRecExp (bs, e2) }
 
 SeqExpr :
-    l=AssignExpr SEMI r=SeqExpr { UnitSeqExp (l, r) }
+    l=IfExpr SEMI r=SeqExpr { UnitSeqExp (l, r) }
+  | e=IfExpr { e }
+
+IfExpr :
+    IF c=Expr THEN t=AssignExpr ELSE e=AssignExpr { IfExp (c, t, e) }
   | e=AssignExpr { e }
 
 AssignExpr :
-    l=OrExpr COLONEQ r=AssignExpr { BinOp (Assign, l, r) }
-  | e=OrExpr { e }
+    l=TupleExpr COLONEQ r=AssignExpr { BinOp (Assign, l, r) }
+  | e=TupleExpr { e }
+
+TupleExpr :
+    e=OrExpr { e }
+  | l=OrExpr COMMA r=TupleExprR { match r with
+                                    TupleExp exps -> TupleExp (l :: exps)
+                                  | _ -> TupleExp [l; r] }
+
+TupleExprR :
+    e=OrExpr { TupleExp [e] }
+  | l=OrExpr COMMA r=TupleExprR { match r with
+                                    TupleExp exps -> TupleExp (l :: exps)
+                                  | _ -> TupleExp [l; r] }
 
 OrExpr :
     l=AndExpr OR r=OrExpr { BinOp (Or, l, r) }
@@ -59,8 +75,8 @@ AndExpr :
   | e=LTExpr { e }
 
 LTExpr :
-    l=PExpr LT r=LTExpr { BinOp (Lt, l, r) }
-  | l=PExpr EQ r=LTExpr { BinOp (Eq, l, r) }
+    l=LTExpr LT r=PExpr { BinOp (Lt, l, r) }
+  | l=LTExpr EQ r=PExpr { BinOp (Eq, l, r) }
   | e=PExpr { e }
 
 PExpr :
@@ -96,9 +112,6 @@ InfixFunExpr :
   | LPAREN LT RPAREN { FunExp ("x", FunExp ("y", BinOp (Lt, Var "x", Var "y"))) }
   | LPAREN AND RPAREN { FunExp ("x", FunExp ("y", BinOp (And, Var "x", Var "y"))) }
   | LPAREN OR RPAREN { FunExp ("x", FunExp ("y", BinOp (Or, Var "x", Var "y"))) }
-
-IfExpr :
-    IF c=Expr THEN t=Expr ELSE e=Expr { IfExp (c, t, e) }
 
 FunExpr :
     FUN e=FunArgsAndBody { e }

@@ -37,6 +37,7 @@ let rec subst_type s = function
   | TyFun (ty1, ty2) -> TyFun (subst_type s ty1, subst_type s ty2)
   | TyList _ -> failwith "Not implemented"
   | TyRef ty -> TyRef (subst_type s ty)
+  | TyTuple tys -> TyTuple (List.map tys ~f:(fun ty -> subst_type s ty))
   | t -> t
 
 (* t1 -> forall a_1, ..., a_k.t1 *)
@@ -198,6 +199,13 @@ let rec ty_exp tyenv = function
       let tyvar = TyVar (fresh_tyvar ()) in
       let newsubst = unify s [(ty, TyRef tyvar)] in
       (newsubst, subst_type newsubst tyvar)
+  | TupleExp exps ->
+      let s, tys = List.fold_right exps ~init:(IM.empty, [])
+                     ~f:(fun e (s, tys) ->
+                           let s', ty = ty_exp tyenv e in
+                           (merge_subst s s', ty :: tys))
+      in
+      (s, TyTuple (List.map tys ~f:(fun ty -> subst_type s ty)))
 
 let ty_decl tyenv e =
   let inner tyenv = (function
