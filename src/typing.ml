@@ -224,6 +224,10 @@ let ty_prim op ty1 ty2 = match op with
   | And | Or -> ([(ty1, TyBool); (ty2, TyBool)], TyBool)
   | Eq -> ([(ty1, ty2)], TyBool) (* todo *)
   | Assign -> ([ty1, TyRef ty2], TyUnit)
+  | Cons -> ([TyList ty1, ty2], TyList ty1)
+  | Append ->
+      let ty_alpha = TyVar (fresh_tyvar ()) in
+      [(ty1, TyList ty_alpha); (ty2, TyList ty_alpha)], TyList ty_alpha
 
 let rec ty_exp tyenv = function
     Var x ->

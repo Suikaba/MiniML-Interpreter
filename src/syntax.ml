@@ -4,6 +4,7 @@ open Core
 type id = string
 
 type binOp = Plus | Minus | Mult | Div | Lt | And | Or | Eq | Assign
+             | Cons | Append
 
 type patternExp =
     PVar of id

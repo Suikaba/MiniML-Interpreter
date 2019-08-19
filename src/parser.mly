@@ -10,8 +10,8 @@ open Syntax
 %token FUN RARROW
 %token EXCLA COLONEQ
 %token COMMA
-%token LBOXBRA RBOXBRA
-%token BAR COLOCOLO
+%token LBOXBRA RBOXBRA COLOCOLO APPEND
+%token BAR
 
 %token <int> INTV
 %token <Syntax.id> ID
@@ -77,8 +77,16 @@ AndExpr :
   | e=LTExpr { e }
 
 LTExpr :
-    l=LTExpr LT r=PExpr { BinOp (Lt, l, r) }
-  | l=LTExpr EQ r=PExpr { BinOp (Eq, l, r) }
+    l=LTExpr LT r=AppendExpr { BinOp (Lt, l, r) }
+  | l=LTExpr EQ r=AppendExpr { BinOp (Eq, l, r) }
+  | e=AppendExpr { e }
+
+AppendExpr :
+    l=ConsExpr APPEND r=AppendExpr { BinOp (Append, l, r) }
+  | e=ConsExpr { e }
+
+ConsExpr :
+    l=PExpr COLOCOLO r=ConsExpr { BinOp (Cons, l, r) }
   | e=PExpr { e }
 
 PExpr :
