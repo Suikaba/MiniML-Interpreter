@@ -1,12 +1,12 @@
-open Eval
 open Syntax
 open Typing
+open Eval
 
 let read_ch_eval_print ~ic:ic ~env:env ~tyenv:tyenv =
   print_string "# ";
   flush stdout;
   let decl = Parser.toplevel Lexer.main ic in
-  let (tys, newtyenv) = ty_decl tyenv decl in
+  let tys, newtyenv = ty_decl tyenv decl in
   let (id_vals, newenv) = eval_decl env decl in
   let id_val_tys = List.map2 (fun (id, v) (_, ty) -> (id, v, ty)) id_vals tys in
   List.iter (fun (id, v, ty) -> Printf.printf "val %s : " id;

@@ -1,8 +1,19 @@
 (* ML interpreter / type reconstruction *)
 open Core
+
 type id = string
 
 type binOp = Plus | Minus | Mult | Div | Lt | And | Or | Eq | Assign
+
+type patternExp =
+    PVar of id
+  | PUnitLit
+  | PILit of int
+  | PBLit of bool
+  | PTupleExp of patternExp list
+  | PConsExp of patternExp list
+  | PListExp of patternExp list
+  | PCombineExp of patternExp list
 
 type exp =
     Var of id
@@ -11,8 +22,8 @@ type exp =
   | BLit of bool
   | BinOp of binOp * exp * exp
   | IfExp of exp * exp * exp
-  | LetExp of (id * exp) list * exp
-  | LetRecExp of (id * exp) list * exp
+  | LetExp of (patternExp * exp) list * exp
+  | LetRecExp of (patternExp * exp) list * exp
   | FunExp of id * exp
   | AppExp of exp * exp
   | UnitSeqExp of exp * exp
@@ -21,18 +32,20 @@ type exp =
   | TupleExp of exp list
   | ListExp of exp list
 
-let is_value_exp = function
+(* for value restriction *)
+let rec is_value_exp = function
   | UnitLit -> true
   | ILit _ -> true
   | FunExp _ -> true
   | BLit _ -> true
-  | TupleExp _ -> true
+  | TupleExp exps
+  | ListExp exps -> List.for_all exps ~f:(fun e -> is_value_exp e)
   | _ -> false
 
 type program =
     Exp of exp
-  | Decl of (id * exp) list
-  | RecDecl of (id * exp) list
+  | Decl of (patternExp * exp) list
+  | RecDecl of (patternExp * exp) list
 
 type tyvar = int
 type ty =

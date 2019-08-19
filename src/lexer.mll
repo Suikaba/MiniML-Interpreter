@@ -39,6 +39,8 @@ rule main = parse
 | "," { Parser.COMMA }
 | "[" { Parser.LBOXBRA }
 | "]" { Parser.RBOXBRA }
+| "|" { Parser.BAR }
+| "::" { Parser.COLOCOLO }
 
 | "(*" { comment lexbuf; main lexbuf }
 

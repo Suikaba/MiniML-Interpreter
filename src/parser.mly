@@ -11,6 +11,7 @@ open Syntax
 %token EXCLA COLONEQ
 %token COMMA
 %token LBOXBRA RBOXBRA
+%token BAR COLOCOLO
 
 %token <int> INTV
 %token <Syntax.id> ID
@@ -25,12 +26,12 @@ toplevel :
   | LET REC bs=LetBindings SEMISEMI { RecDecl bs }
 
 LetBindings :
-    x=ID EQ e=Expr { [(x, e)] }
-  | x=ID ps=Parameters EQ e=Expr { [(x, make_fun_exp e ps)] }
-  | x=ID EQ e=Expr ANDLET bs=LetBindings { (x, e) :: bs }
-  | x=ID ps=Parameters EQ e=Expr ANDLET bs=LetBindings { (x, make_fun_exp e ps) :: bs }
+  | p=Pattern EQ e=Expr { [(p, e)] }
+  | x=ID ps=Parameters EQ e=Expr { [(PVar x, make_fun_exp e ps)] }
+  | p=Pattern EQ e=Expr ANDLET bs=LetBindings { (p, e) :: bs }
+  | x=ID ps=Parameters EQ e=Expr ANDLET bs=LetBindings { (PVar x, make_fun_exp e ps) :: bs }
 
-Parameters :
+Parameters : (* todo: replace with Pattern *)
     x=ID { [x] }
   | x=ID ps=Parameters { x :: ps }
 
@@ -133,3 +134,47 @@ FunExpr :
 FunArgsAndBody :
     x=ID RARROW e=Expr { FunExp (x, e) }
   | x=ID e=FunArgsAndBody { FunExp (x, e) }
+
+Pattern : (* todo *)
+    p=TuplePattern { p }
+  | p=TuplePattern BAR ps=CombinedPattern { PCombineExp (p :: ps) }
+CombinedPattern :
+    p=TuplePattern { [p] }
+  | p=TuplePattern BAR ps=CombinedPattern { p :: ps }
+
+TuplePattern :
+    p=ConsPattern { p }
+  | p=ConsPattern COMMA ps=TuplePatternSeq { PTupleExp (p :: ps) }
+TuplePatternSeq :
+    p=ConsPattern { [p] }
+  | p=ConsPattern COMMA ps=TuplePatternSeq { p :: ps }
+
+ConsPattern :
+    p=APattern { p }
+  | p=APattern COLOCOLO ps=ConsPatternSeq { PConsExp (p :: ps) }
+ConsPatternSeq :
+    p=APattern { [p] }
+  | p=APattern COLOCOLO ps=ConsPatternSeq { p :: ps }
+
+APattern :
+    i=ID { PVar i }
+  | TRUE { PBLit true }
+  | FALSE { PBLit false }
+  | i=INTV { PILit i }
+  | LPAREN RPAREN { PUnitLit }
+  | LPAREN p=Pattern RPAREN { p }
+  | p=ListPattern { p }
+
+ListPattern :
+    LBOXBRA RBOXBRA { PListExp [] }
+  | LBOXBRA ps=ListPatternSeq RBOXBRA { PListExp ps }
+ListPatternSeq :
+    p=APattern { [p] }
+  | p=APattern SEMI ps=ListPatternSeq { p :: ps }
+
+                         (*
+PatternMatching :
+    p=Pattern RARROW e=Expr { p }
+  | BAR p=Pattern RARROW e=Expr { p }
+  | p=Pattern RARROW e=Expr {}
+                          *)

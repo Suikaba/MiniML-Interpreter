@@ -1,4 +1,5 @@
 open Syntax
+open Core
 
 type exval =
     IntV of int
@@ -14,10 +15,6 @@ exception Error of string
 
 let err s = raise (Error s)
 
-(* errors *)
-let err_bound_several_times () = err "Variable is bound several times in this matching"
-let err_let_rec_not_allowed () = err "This kind of expression is not allowed as right-hand side of 'let rec'"
-
 (* pretty printing *)
 let rec string_of_exval = function
     IntV i -> string_of_int i
@@ -25,37 +22,67 @@ let rec string_of_exval = function
   | BoolV b -> string_of_bool b
   | ProcV (_, _, _) -> "<fun>"
   | RefV v -> "{contents = " ^ (string_of_exval !v) ^ "}"
-  | TupleV vs -> "(" ^ (List.map (fun v -> string_of_exval v) vs |> String.concat ", ") ^ ")"
-  | ListV vs -> "[" ^ (List.map (fun v -> string_of_exval v) vs |> String.concat "; ") ^ "]"
+  | TupleV vs -> "(" ^ (List.map ~f:(fun v -> string_of_exval v) vs |> String.concat ~sep:", ") ^ ")"
+  | ListV vs -> "[" ^ (List.map ~f:(fun v -> string_of_exval v) vs |> String.concat ~sep:"; ") ^ "]"
 
 let pp_val v = print_string (string_of_exval v)
 
 
-(* checking several times bindings *)
-let rec check_bound_several_times = function
-    [] -> false
-  | (id1, _) :: tl -> List.exists (fun (id2, _) -> id1 = id2) tl || check_bound_several_times tl
+(* =============================================================================
+   Matching
+ *)
+let rec matching p v = match p, v with
+    PVar id, v -> Some [(id, v)]
+  | PUnitLit, UnitV -> Some []
+  | PILit i, IntV j when i = j -> Some []
+  | PBLit b1, BoolV b2 when b1 = b2 -> Some []
+  | PTupleExp ps, TupleV vs ->
+      let rec inner ps vs = (match ps, vs with
+          [], [] -> Some []
+        | _, [] | [], _ -> None
+        | p :: p_tl, v :: v_tl ->
+            let hd = matching p v in
+            let tl = inner p_tl v_tl in
+            (match hd, tl with
+               Some hd, Some tl -> Some (hd @ tl)
+             | _ -> None))
+      in inner ps vs
+  | PConsExp ps, ListV vs ->
+      let rec inner ps vs = (match ps, vs with
+          [], _ -> None
+        | [p], tl -> matching p (ListV tl)
+        | p :: p_tl, v :: v_tl ->
+            let hd = matching p v in
+            let tl = inner p_tl v_tl in
+            (match hd, tl with
+               Some hd, Some tl -> Some (hd @ tl)
+             | _ -> None)
+        | _, [] -> None)
+      in inner ps vs
+  | PListExp ps, ListV vs ->
+      let rec inner ps vs = (match ps, vs with
+          [], [] -> Some []
+        | _, [] | [], _ -> None
+        | p :: p_tl, v :: v_tl ->
+            let hd = matching p v in
+            let tl = inner p_tl v_tl in
+            (match hd, tl with
+               Some hd, Some tl -> Some (hd @ tl)
+             | _ -> None))
+      in inner ps vs
+  | PCombineExp ps, v ->
+      let rec inner = (function
+          [] -> None
+        | p :: ps ->
+            (match matching p v with
+               Some l -> Some l
+             | None -> inner ps))
+      in inner ps
+  | _ -> None
 
-(* checking invalid let rec *)
-let check_let_rec binds =
-  let rec check_impl name = function
-      ILit _ | BLit _ | UnitLit -> false
-    | Var x -> x = name
-    | BinOp (_, exp1, exp2) -> (check_impl name exp1) || (check_impl name exp2)
-    | IfExp (exp1, exp2, exp3) -> (check_impl name exp1) || (check_impl name exp2) || (check_impl name exp3)
-    | LetExp (binds, exp2) | LetRecExp (binds, exp2) ->
-        let appear = List.exists (fun (id, _) -> id = name) binds in
-        not appear && check_impl name exp2
-    | FunExp _ -> false (* todo: Is this correct ? *)
-    | AppExp (exp1, exp2) -> (check_impl name exp1) || (check_impl name exp2)
-    | UnitSeqExp (exp1, exp2) -> (check_impl name exp1) || (check_impl name exp2)
-    | TupleExp exps -> List.exists (fun e -> check_impl name e) exps
-    | ListExp exps -> List.exists (fun e -> check_impl name e) exps
-    | _ -> err "check_let_rec: Not implemented"
-  in
-  List.map (fun (id, _) -> id) binds
-  |> List.exists (fun name -> List.exists (fun (_, exp) -> check_impl name exp) binds)
-
+(* =============================================================================
+   Main
+*)
 let rec apply_prim op arg1 arg2 = match op, arg1, arg2 with
     Plus, IntV i1, IntV i2 -> IntV (i1 + i2)
   | Plus, _, _ -> err ("Both arguments must be integer: +")
@@ -95,21 +122,28 @@ let rec eval_exp env = function
      | BoolV false -> eval_exp env exp3
      | _ -> err ("Test expression must be boolean: if"))
   | LetExp (binds, exp2) ->
-    if check_bound_several_times binds then err_bound_several_times ();
     (* first, evaluate all expr with current environment *)
-    let id_vals = List.map (fun (id, e) -> (id, eval_exp env e)) binds in
+    let id_vals = List.map binds
+                    ~f:(fun (p, e) -> match matching p (eval_exp env e) with
+                          Some l -> l
+                        | None -> err "Eval: matching error")
+                  |> List.join in
     (* then, update environment *)
-    let newenv = List.fold_left (fun e (id, v) -> Environment.extend id v e) env id_vals in
+    let newenv = List.fold_left id_vals ~init:env
+                   ~f:(fun e (id, v) -> Environment.extend id v e) in
     eval_exp newenv exp2
   | LetRecExp (binds, exp2) ->
-      if check_bound_several_times binds then err_bound_several_times ();
-      if check_let_rec binds then err_let_rec_not_allowed ();
       let dummyenv = ref Environment.empty in
       let make_dummy_proc = function
           FunExp (para, body) -> ProcV(para, body, dummyenv)
         | e -> eval_exp env e in (* if e has not function, e must not contain names defined now *)
       (* first, add all rec functions to current environment *)
-      let newenv = List.fold_left (fun env' (id, e) -> Environment.extend id (make_dummy_proc e) env') env binds in
+      let newenv = List.fold_left binds ~init:env
+                     ~f:(fun env (p, e) -> match matching p (make_dummy_proc e) with
+                           Some l ->
+                             List.fold_left l ~init:env
+                               ~f:(fun env (id, v) -> Environment.extend id v env)
+                         | None -> err "Eval: matching error") in
       dummyenv := newenv;
       eval_exp newenv exp2
   | FunExp (id, exp) -> ProcV (id, exp, ref env)
@@ -131,27 +165,34 @@ let rec eval_exp env = function
       (match eval_exp env exp with
        | RefV r -> !r
        | _ -> err "Eval/DerefExp: Non-reference type is dereferenced")
-  | TupleExp exps -> TupleV (List.map (fun e -> eval_exp env e) exps)
-  | ListExp exps -> ListV (List.map (fun e -> eval_exp env e) exps)
+  | TupleExp exps -> TupleV (List.map ~f:(fun e -> eval_exp env e) exps)
+  | ListExp exps -> ListV (List.map ~f:(fun e -> eval_exp env e) exps)
 
 let eval_decl env = function
     Exp e -> let v = eval_exp env e in ([("-", v)], env)
   | Decl binds ->
-    if check_bound_several_times binds then err_bound_several_times ();
-    (* first, evaluate all expr with current environment *)
-    let id_vals = List.map (fun (id, e) -> (id, eval_exp env e)) binds in
-    (* then, update environment *)
-    let newenv = List.fold_left (fun e (id, v) -> Environment.extend id v e) env id_vals in
-    (id_vals, newenv)
+      (* first, evaluate all expr with current environment *)
+      let id_vals = List.map binds
+                      ~f:(fun (p, e) -> match matching p (eval_exp env e) with
+                            Some l -> l
+                          | None -> err "Eval: matching error")
+                    |> List.join in
+      (* then, update environment *)
+      let newenv = List.fold_left id_vals ~init:env
+                     ~f:(fun e (id, v) -> Environment.extend id v e) in
+      (id_vals, newenv)
   | RecDecl binds ->
-    if check_bound_several_times binds then err_bound_several_times ();
-    if check_let_rec binds then err_let_rec_not_allowed ();
-    let dummyenv = ref Environment.empty in
-    let make_dummy_proc = function
-        FunExp (para, body) -> ProcV(para, body, dummyenv)
-      | e -> eval_exp env e in (* if e has not function, e must not contain names defined now *)
-    (* first, add all rec functions to current environment *)
-    let newenv = List.fold_left (fun env' (id, e) -> Environment.extend id (make_dummy_proc e) env') env binds in
-    dummyenv := newenv;
-    let id_vals = List.map (fun (id, e) -> (id, eval_exp newenv e)) binds in
-    (id_vals, newenv)
+      let dummyenv = ref Environment.empty in
+      let make_dummy_proc = function
+          FunExp (para, body) -> ProcV(para, body, dummyenv)
+        | e -> eval_exp env e in (* if e has not function, e must not contain names defined now *)
+      (* first, add all rec functions to current environment *)
+      let id_vals, newenv =
+        List.fold_right binds ~init:([], env)
+          ~f:(fun (p, e) (id_vals, env) -> match matching p (make_dummy_proc e) with
+                Some l ->
+                  List.fold_right l ~init:(id_vals, env)
+                    ~f:(fun (id, v) (id_vals, env) -> (id, v) :: id_vals, Environment.extend id v env)
+              | None -> err "Eval: matching error") in
+      dummyenv := newenv;
+      (id_vals, newenv)
