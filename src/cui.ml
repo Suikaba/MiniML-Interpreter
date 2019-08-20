@@ -7,9 +7,10 @@ let read_ch_eval_print ~ic:ic ~env:env ~tyenv:tyenv =
   print_string "# ";
   Out_channel.flush stdout;
   let decl = Parser.toplevel Lexer.main ic in
-  let tys, newtyenv = ty_decl tyenv decl in
-  let (id_vals, newenv) = eval_decl env decl in
-  let id_val_tys = List.map2_exn ~f:(fun (id, v) (_, ty) -> (id, v, ty)) id_vals tys in
+  let id_tys, newtyenv = ty_decl tyenv decl in
+  let id_vals, newenv = eval_decl env decl in
+  let id_tys = SM.of_alist_exn id_tys in
+  let id_val_tys = List.map ~f:(fun (id, v) -> (id, v, SM.find_exn id_tys id)) id_vals in
   List.iter ~f:(fun (id, v, ty) -> Printf.printf "val %s : " id;
                                    pp_ty ty;
                                    print_string " = ";
@@ -60,3 +61,14 @@ let initial_env =
 let initial_tyenv =
   Environment.extend "not" (tysc_of_ty not_ty)
     (Environment.extend "ref" ref_tysc Environment.empty)
+
+
+(* for test *)
+let read_string_eval str env tyenv =
+  let decl = Parser.toplevel Lexer.main (Lexing.from_string str) in
+  let id_tys, newtyenv = ty_decl tyenv decl in
+  let id_vals, newenv = eval_decl env decl in
+  let id_tys = SM.of_alist_exn id_tys in
+  let id_ty_vals = List.map id_vals
+                     ~f:(fun (id, v) -> (id, SM.find_exn id_tys id, v)) in
+  id_ty_vals, newenv, newtyenv
