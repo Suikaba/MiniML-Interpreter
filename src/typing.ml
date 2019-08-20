@@ -69,6 +69,7 @@ let rec unify subst eqs =
       (match ty1, ty2 with
       | TyInt, TyInt -> unify subst tl
       | TyBool, TyBool -> unify subst tl
+      | TyUnit, TyUnit -> unify subst tl
       | TyVar v1, TyVar v2 ->
           UF.union (Map.find_exn subst v1) (Map.find_exn subst v2);
           unify subst tl
