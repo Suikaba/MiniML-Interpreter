@@ -28,13 +28,9 @@ toplevel :
 
 LetBindings :
   | p=Pattern EQ e=Expr { [(p, e)] }
-  | x=ID ps=Parameters EQ e=Expr { [(PVar x, make_fun_exp e ps)] }
+  | x=ID p=Pattern ps=list(Pattern) EQ e=Expr { [(PVar x, make_fun_exp e (p :: ps))] }
   | p=Pattern EQ e=Expr ANDLET bs=LetBindings { (p, e) :: bs }
-  | x=ID ps=Parameters EQ e=Expr ANDLET bs=LetBindings { (PVar x, make_fun_exp e ps) :: bs }
-
-Parameters : (* todo: replace with Pattern *)
-    x=ID { [x] }
-  | x=ID ps=Parameters { x :: ps }
+  | x=ID p=Pattern ps=list(Pattern) EQ e=Expr ANDLET bs=LetBindings { (PVar x, make_fun_exp e (p :: ps)) :: bs }
 
 Expr :
     e=SeqExpr { e }
@@ -132,18 +128,18 @@ ListSeqExpr : (* not include SeqExpr directly *)
   | l=IfExpr SEMI r=ListSeqExpr { l :: r }
 
 InfixFunExpr :
-    LPAREN PLUS RPAREN { FunExp ("x", FunExp ("y", BinOp (Plus, Var "x", Var "y"))) }
-  | LPAREN MULT RPAREN { FunExp ("x", FunExp ("y", BinOp (Mult, Var "x", Var "y"))) }
-  | LPAREN LT RPAREN { FunExp ("x", FunExp ("y", BinOp (Lt, Var "x", Var "y"))) }
-  | LPAREN AND RPAREN { FunExp ("x", FunExp ("y", BinOp (And, Var "x", Var "y"))) }
-  | LPAREN OR RPAREN { FunExp ("x", FunExp ("y", BinOp (Or, Var "x", Var "y"))) }
+    LPAREN PLUS RPAREN { FunExp (PVar "x", FunExp (PVar "y", BinOp (Plus, Var "x", Var "y"))) }
+  | LPAREN MULT RPAREN { FunExp (PVar "x", FunExp (PVar "y", BinOp (Mult, Var "x", Var "y"))) }
+  | LPAREN LT RPAREN { FunExp (PVar "x", FunExp (PVar "y", BinOp (Lt, Var "x", Var "y"))) }
+  | LPAREN AND RPAREN { FunExp (PVar "x", FunExp (PVar "y", BinOp (And, Var "x", Var "y"))) }
+  | LPAREN OR RPAREN { FunExp (PVar "x", FunExp (PVar "y", BinOp (Or, Var "x", Var "y"))) }
 
 FunExpr :
     FUN e=FunArgsAndBody { e }
 
 FunArgsAndBody :
-    x=ID RARROW e=Expr { FunExp (x, e) }
-  | x=ID e=FunArgsAndBody { FunExp (x, e) }
+    p=Pattern RARROW e=Expr { FunExp (p, e) }
+  | p=Pattern e=FunArgsAndBody { FunExp (p, e) }
 
 Pattern :
     p=TuplePattern { p }

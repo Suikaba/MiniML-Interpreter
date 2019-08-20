@@ -25,7 +25,7 @@ type exp =
   | IfExp of exp * exp * exp
   | LetExp of (patternExp * exp) list * exp
   | LetRecExp of (patternExp * exp) list * exp
-  | FunExp of id * exp
+  | FunExp of patternExp * exp
   | AppExp of exp * exp
   | UnitSeqExp of exp * exp
   | RefExp of exp
@@ -40,6 +40,8 @@ let rec is_value_exp = function
   | ILit _ -> true
   | FunExp _ -> true
   | BLit _ -> true
+  | LetExp (_, exp) -> is_value_exp exp
+  | LetRecExp (_, exp) -> is_value_exp exp
   | TupleExp exps
   | ListExp exps -> List.for_all exps ~f:(fun e -> is_value_exp e)
   | _ -> false

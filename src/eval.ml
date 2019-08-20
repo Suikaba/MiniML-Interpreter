@@ -5,7 +5,7 @@ type exval =
     IntV of int
   | UnitV
   | BoolV of bool
-  | ProcV of id * exp * dnval Environment.t ref
+  | ProcV of patternExp * exp * dnval Environment.t ref
   | RefV of exval ref
   | TupleV of exval list
   | ListV of exval list
@@ -140,14 +140,18 @@ let rec eval_exp env = function
                          | None -> err "Eval: matching error") in
       dummyenv := newenv;
       eval_exp newenv exp2
-  | FunExp (id, exp) -> ProcV (id, exp, ref env)
+  | FunExp (p, exp) -> ProcV (p, exp, ref env)
   | AppExp (exp1, exp2) ->
       let funval = eval_exp env exp1 in
       let arg = eval_exp env exp2 in
       (match funval with
-         ProcV (id, body, env') ->
-           let newenv = Environment.extend id arg !env' in
-           eval_exp newenv body
+         ProcV (p, body, env') ->
+           (match matching p arg with
+              Some l ->
+                let env = List.fold_left l ~init:!env'
+                            ~f:(fun env (id, v) -> Environment.extend id v env) in
+                eval_exp env body
+            | None -> err "Eval: matching error")
        | _ -> err ("Non-function value is applied"))
   | UnitSeqExp (exp1, exp2) ->
       let _ = eval_exp env exp1 in

@@ -312,10 +312,17 @@ let rec ty_exp tyenv = function
       let (s2, tyans) = ty_exp newtyenv exp2 in
       let s = merge_subst s1 s2 in
       (s, subst_type s tyans)
-  | FunExp (id, exp) ->
-      let domty = TyVar (fresh_tyvar ()) in
-      let s, ranty = ty_exp (Environment.extend id (tysc_of_ty domty) tyenv) exp in
-      (s, TyFun (subst_type s domty, ranty))
+  | FunExp (p, exp) ->
+      let penv = pattern_variables p |> SS.to_list
+                 |> List.map ~f:(fun id -> id, TyVar (fresh_tyvar ()))
+                 |> SM.of_alist_exn in
+      let p_ty, eqs = ty_pattern penv p in
+      let tyenv = SM.fold penv ~init:tyenv
+                       ~f:(fun ~key:id ~data:ty tyenv ->
+                             Environment.extend id (tysc_of_ty ty) tyenv) in
+      let s, ranty = ty_exp tyenv exp in
+      let s = unify s eqs in
+      (s, TyFun (subst_type s p_ty, ranty))
   | AppExp (exp1, exp2) ->
       let (s1, tyf) = ty_exp tyenv exp1 in
       let (s2, tyarg) = ty_exp tyenv exp2 in
