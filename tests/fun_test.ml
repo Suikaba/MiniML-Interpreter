@@ -1,13 +1,36 @@
+open OUnit2
+open Miniml.Syntax
+open Miniml.Cui
+open Miniml.Eval
 
-(fun x -> x + 2) 1;;
+let fun_test1 _ =
+  let env, tyenv = initial_env, initial_tyenv in
+  let expr = "(fun x -> x + 1);;" in
+  let id_ty_vals, _, _ = read_string_eval expr env tyenv in
+  assert_equal id_ty_vals [("-", TyFun (TyInt, TyInt), ProcV (PVar "x", BinOp (Plus, Var "x", ILit 1), ref env))]
 
-(fun id -> fun x -> id x) (fun x -> x) 0;;
+let fun_test2 _ =
+  let env, tyenv = initial_env, initial_tyenv in
+  let expr = "(fun x -> x + 2) 1;;" in
+  let id_ty_vals, _, _ = read_string_eval expr env tyenv in
+  assert_equal id_ty_vals [("-", TyInt, IntV 3)]
 
-let f =
-  let x = 2 in
-  let addx = fun y -> x + y in
-  addx
-in f 4;;
+let fun_test3 _ =
+  let env, tyenv = initial_env, initial_tyenv in
+  let expr = "(fun id x -> id x) (fun x -> x) 0;;" in
+  let id_ty_vals, _, _ = read_string_eval expr env tyenv in
+  assert_equal id_ty_vals [("-", TyInt, IntV 0)]
 
-let f = fun x y z -> x + y + z in
-f 2 3 4;;
+let fun_test4 _ =
+  let env, tyenv = initial_env, initial_tyenv in
+  let expr = "(fun (a, b) [c; d] -> a + b + c + d) (1, 2) [3; 4];;" in
+  let id_ty_vals, _, _ = read_string_eval expr env tyenv in
+  assert_equal id_ty_vals [("-", TyInt, IntV 10)]
+
+let suite =
+  "suite">:::["fun_test1">:: fun_test1;
+              "fun_test2">:: fun_test2;
+              "fun_test3">:: fun_test3;
+              "fun_test4">:: fun_test4;]
+
+let () = run_test_tt_main suite

@@ -1,1 +1,11 @@
-(test (name unionfind_test) (libraries miniml oUnit))
+(tests
+  (libraries miniml oUnit)
+  (names arith_prim_test
+         if_test
+         fun_test
+         let_test
+         let_rec_test
+         ref_test
+         matching_test
+         unionfind_test)
+)
