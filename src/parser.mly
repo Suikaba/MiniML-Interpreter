@@ -12,6 +12,7 @@ open Syntax
 %token COMMA
 %token LBOXBRA RBOXBRA COLOCOLO APPEND
 %token BAR
+%token MATCH WITH
 
 %token <int> INTV
 %token <Syntax.id> ID
@@ -39,6 +40,7 @@ Expr :
     e=SeqExpr { e }
   | e=LetExpr { e }
   | e=FunExpr { e }
+  | e=MatchExpr { e }
 
 LetExpr :
     LET bs=LetBindings IN e2=Expr { LetExp (bs, e2) }
@@ -143,7 +145,7 @@ FunArgsAndBody :
     x=ID RARROW e=Expr { FunExp (x, e) }
   | x=ID e=FunArgsAndBody { FunExp (x, e) }
 
-Pattern : (* todo *)
+Pattern :
     p=TuplePattern { p }
   | p=TuplePattern BAR ps=CombinedPattern { PCombineExp (p :: ps) }
 CombinedPattern :
@@ -180,9 +182,15 @@ ListPatternSeq :
     p=APattern { [p] }
   | p=APattern SEMI ps=ListPatternSeq { p :: ps }
 
-                         (*
+MatchExpr :
+    MATCH e=Expr WITH m=PatternMatching { MatchExp (e, m) }
+
 PatternMatching :
-    p=Pattern RARROW e=Expr { p }
-  | BAR p=Pattern RARROW e=Expr { p }
-  | p=Pattern RARROW e=Expr {}
-                          *)
+    p=Pattern RARROW e=Expr { [p, e] }
+  | BAR p=Pattern RARROW e=Expr { [p, e] }
+  | p=Pattern RARROW e=Expr ms=PatternMatchingSeq { (p, e) :: ms }
+  | BAR p=Pattern RARROW e=Expr ms=PatternMatchingSeq { (p, e) :: ms }
+
+PatternMatchingSeq :
+    BAR p=Pattern RARROW e=Expr { [p, e] }
+  | BAR p=Pattern RARROW e=Expr ms=PatternMatchingSeq { (p, e) :: ms }

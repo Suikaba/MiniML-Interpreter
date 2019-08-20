@@ -161,6 +161,21 @@ let rec eval_exp env = function
        | _ -> err "Eval/DerefExp: Non-reference type is dereferenced")
   | TupleExp exps -> TupleV (List.map ~f:(fun e -> eval_exp env e) exps)
   | ListExp exps -> ListV (List.map ~f:(fun e -> eval_exp env e) exps)
+  | MatchExp (exp1, mexps) ->
+      let v = eval_exp env exp1 in
+      let rec inner = (function
+          [] -> None
+        | (p, exp2) :: tl ->
+            (match matching p v with
+               Some l ->
+                 let env = List.fold_left l ~init:env
+                             ~f:(fun env (id, v) -> Environment.extend id v env) in
+                 Some (eval_exp env exp2)
+             | None -> inner tl))
+      in
+      (match inner mexps with
+         Some v -> v
+       | None -> err "Eval: matching error")
 
 let eval_decl env = function
     Exp e -> let v = eval_exp env e in ([("-", v)], env)

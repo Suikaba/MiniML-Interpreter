@@ -32,6 +32,7 @@ type exp =
   | DerefExp of exp
   | TupleExp of exp list
   | ListExp of exp list
+  | MatchExp of exp * (patternExp * exp) list
 
 (* for value restriction *)
 let rec is_value_exp = function

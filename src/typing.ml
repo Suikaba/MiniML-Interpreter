@@ -351,6 +351,27 @@ let rec ty_exp tyenv = function
                                 (merge_subst s' s'', (ty1, ty'') :: eqs')) in
            let s = unify s eqs in
            (s, TyList (subst_type s ty1)))
+  | MatchExp (e, mexps) ->
+      let s, ty = ty_exp tyenv e in
+      let tys = List.map mexps
+                  ~f:(fun (p, exp) ->
+                        let penv = pattern_variables p |> SS.to_list
+                                   |> List.map ~f:(fun id -> id, (TyVar (fresh_tyvar ())))
+                                   |> SM.of_alist_exn
+                        in
+                        let p_ty, eqs = ty_pattern penv p in
+                        let s = unify s ((p_ty, ty) :: eqs) in
+                        let tyenv = SM.to_alist penv
+                                    |> List.fold_left ~init:tyenv
+                                         ~f:(fun tyenv (id, ty) ->
+                                               Environment.extend id (tysc_of_ty (subst_type s ty)) tyenv)
+                        in
+                        let s', ty' = ty_exp tyenv exp in
+                        subst_type (merge_subst s s') ty')
+      in
+      let s = List.map (List.tl_exn tys) ~f:(fun ty -> ty, List.hd_exn tys)
+              |> unify s in
+      (s, subst_type s (List.hd_exn tys))
 
 let ty_decl tyenv decl =
   let inner tyenv = (function

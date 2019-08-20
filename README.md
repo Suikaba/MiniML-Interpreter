@@ -14,11 +14,11 @@
   - `+`, `-`, `/`, `*`, `<` on integer types
   - `&&`, `||` on boolean types
   - `if ... then ... else` statement
-  - Sequential execution; `e1; e2`
-  - Recursive function; `let rec`
-  - Tuple; `e1, e2, ...`
-  - List; `[e1; e2; ...]`, 'e1 :: tl`, `l1 @ l2`
-  - Pattern matching; `let *pattern* = ...`
+  - Sequential execution ; `e1; e2`
+  - Recursive function ; `let rec`
+  - Tuple ; `e1, e2, ...`
+  - List ; `[e1; e2; ...]`, `e1 :: tl` , `l1 @ l2`
+  - Pattern matching ; `let *pattern* = ...` , `match expr with ...`
 
 
 ## Bulid and Test
