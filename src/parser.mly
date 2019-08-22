@@ -31,9 +31,9 @@ toplevel :
 
 LetBindings :
   | p=Pattern EQ e=Expr { [(p, e)] }
-  | x=ID p=Pattern ps=list(Pattern) EQ e=Expr { [(PVar x, make_fun_exp e (p :: ps))] }
+  | x=ID p=APattern ps=list(APattern) EQ e=Expr { [(PVar x, make_fun_exp e (p :: ps))] }
   | p=Pattern EQ e=Expr ANDLET bs=LetBindings { (p, e) :: bs }
-  | x=ID p=Pattern ps=list(Pattern) EQ e=Expr ANDLET bs=LetBindings { (PVar x, make_fun_exp e (p :: ps)) :: bs }
+  | x=ID p=APattern ps=list(APattern) EQ e=Expr ANDLET bs=LetBindings { (PVar x, make_fun_exp e (p :: ps)) :: bs }
 
 Expr :
     e=SeqExpr { e }
@@ -102,7 +102,8 @@ MExpr :
 
 AppExpr :
     e1=AppExpr e2=DerefExpr { AppExp (e1, e2) }
-  | constr=UpperCase e2=DerefExpr { ConstrExp (constr, e2) }
+  | constr=UpperCase { ConstrExp constr }
+  | constr=UpperCase e=DerefExpr { ConstrAppExp (constr, e) }
   | e=DerefExpr { e }
 
 DerefExpr :
@@ -142,8 +143,8 @@ FunExpr :
     FUN e=FunArgsAndBody { e }
 
 FunArgsAndBody :
-    p=Pattern RARROW e=Expr { FunExp (p, e) }
-  | p=Pattern e=FunArgsAndBody { FunExp (p, e) }
+    p=APattern RARROW e=Expr { FunExp (p, e) }
+  | p=APattern e=FunArgsAndBody { FunExp (p, e) }
 
 
 (* Pattern *)
@@ -162,14 +163,15 @@ TuplePatternSeq :
   | p=ConsPattern COMMA ps=TuplePatternSeq { p :: ps }
 
 ConsPattern :
-    p=ConstrPattern { p }
-  | p=ConstrPattern COLOCOLO ps=ConsPatternSeq { PConsExp (p :: ps) }
+    p=AppPattern { p }
+  | p=AppPattern COLOCOLO ps=ConsPatternSeq { PConsExp (p :: ps) }
 ConsPatternSeq :
-    p=ConstrPattern { [p] }
-  | p=ConstrPattern COLOCOLO ps=ConsPatternSeq { p :: ps }
+    p=AppPattern { [p] }
+  | p=AppPattern COLOCOLO ps=ConsPatternSeq { p :: ps }
 
-ConstrPattern :
-    constr=UpperCase p=APattern { PConstrExp (constr, p) }
+AppPattern :
+    constr=UpperCase { PConstrExp constr }
+  | constr=UpperCase p=APattern { PConstrAppExp (constr, p) }
   | p=APattern { p }
 
 APattern :
@@ -211,11 +213,15 @@ FunTypeExpr :
   | e=TupleTypeExpr { e }
 
 TupleTypeExpr :
-    e=ATypeExpr MULT es=TupleTypeExprSeq { TETuple (e :: es) }
-  | e=ATypeExpr { e }
+    e=ListTypeExpr MULT es=TupleTypeExprSeq { TETuple (e :: es) }
+  | e=ListTypeExpr { e }
 TupleTypeExprSeq :
-    e=ATypeExpr { [e] }
-  | e=ATypeExpr MULT es=TupleTypeExprSeq { e :: es }
+    e=ListTypeExpr { [e] }
+  | e=ListTypeExpr MULT es=TupleTypeExprSeq { e :: es }
+
+ListTypeExpr :
+    e=ATypeExpr { e }
+  | e=ListTypeExpr constr=ID { TEConstr (e, constr) }
 
 ATypeExpr :
     LPAREN e=TypeExpr RPAREN { e }
@@ -229,12 +235,18 @@ AndTypeDefinition :
   | AND id=ID EQ decl=ConstrDecl defs=AndTypeDefinition { (id, decl) :: defs }
 
 ConstrDecl :
-    id=UpperCase OF e=TypeExpr { [id, e] }
+    id=UpperCase { [id, TEEmpty] }
+  | id=UpperCase OF e=TypeExpr { [id, e] }
+  | BAR id=UpperCase { [id, TEEmpty] }
   | BAR id=UpperCase OF e=TypeExpr { [id, e] }
   | id=UpperCase OF e=TypeExpr decls=ConstrDeclSeq { (id, e) :: decls }
+  | id=UpperCase decls=ConstrDeclSeq { (id, TEEmpty) :: decls }
   | BAR id=UpperCase OF e=TypeExpr decls=ConstrDeclSeq { (id, e) :: decls }
+  | BAR id=UpperCase decls=ConstrDeclSeq { (id, TEEmpty) :: decls }
 ConstrDeclSeq :
-    BAR id=UpperCase OF e=TypeExpr { [id, e] }
+    BAR id=UpperCase { [id, TEEmpty] }
+  | BAR id=UpperCase OF e=TypeExpr { [id, e] }
+  | BAR id=UpperCase decls=ConstrDeclSeq { (id, TEEmpty) :: decls }
   | BAR id=UpperCase OF e=TypeExpr decls=ConstrDeclSeq { (id, e) :: decls }
 
 UpperCase :

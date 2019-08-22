@@ -49,7 +49,7 @@ rule main = parse
 
 | "(*" { comment lexbuf; main lexbuf }
 
-| ['a'-'z'] ['a'-'z' '0'-'9' '_' '\'']*
+| ['a'-'z'] ['A'-'Z' 'a'-'z' '0'-'9' '_' '\'']*
     { let id = Lexing.lexeme lexbuf in
       try
         List.assoc id reservedWords

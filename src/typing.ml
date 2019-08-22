@@ -71,6 +71,7 @@ let rec unify subst eqs =
       | TyInt, TyInt -> unify subst tl
       | TyBool, TyBool -> unify subst tl
       | TyUnit, TyUnit -> unify subst tl
+      | TyEmpty, TyEmpty -> unify subst tl
       | TyVar v1, TyVar v2 ->
           UF.union (Map.find_exn subst v1) (Map.find_exn subst v2);
           unify subst tl
@@ -129,7 +130,8 @@ let rec pattern_variables = function
       in
       if SS.length vs <> sum then err "Variable is bound several times in this matching";
       vs
-  | PConstrExp (_, p) -> pattern_variables p
+  | PConstrExp _ -> SS.empty
+  | PConstrAppExp (_, p) -> pattern_variables p
   | PCombineExp ps ->
       let vss = List.map ps ~f:(fun p -> pattern_variables p) in
       let fst = List.hd_exn vss in
@@ -172,11 +174,15 @@ let rec ty_pattern penv varenv = function
                              (ty1, ty') :: eqs' @ eqs)
            in
            TyList ty1, eqs)
-  | PConstrExp (id, p) ->
-      let (var_id, ty) = (try Environment.lookup id varenv
+  | PConstrExp id ->
+      let var_id, ty = (try Environment.lookup id varenv
                           with Environment.Not_bound -> raise_unbound_constr id) in
-      let p_ty, eqs = ty_pattern penv varenv p in
-      TyVariant var_id, (ty, p_ty) :: eqs
+      TyVariant var_id, [ty, TyEmpty]
+  | PConstrAppExp (id, p) ->
+      let var_id, ty = (try Environment.lookup id varenv
+                          with Environment.Not_bound -> raise_unbound_constr id) in
+      let tyarg, eqs = ty_pattern penv varenv p in
+      TyVariant var_id, (ty, tyarg) :: eqs
   | PCombineExp ps ->
       let ty1, eqs = ty_pattern penv varenv (List.hd_exn ps) in
       ty1,
@@ -207,7 +213,8 @@ let check_let_rec binds =
     | TupleExp exps -> List.exists ~f:(fun e -> inner name e) exps
     | RefExp exp -> inner name exp
     | DerefExp exp -> inner name exp
-    | ConstrExp (_, exp) -> inner name exp
+    | ConstrExp _ -> false
+    | ConstrAppExp (_, exp) -> inner name exp
     | ListExp exps -> List.exists ~f:(fun e -> inner name e) exps
     | MatchExp _ -> err "Not implemented"
   in
@@ -391,12 +398,17 @@ let rec ty_exp tyenv varenv = function
       let s = List.map (List.tl_exn tys) ~f:(fun ty -> ty, List.hd_exn tys)
               |> unify s in
       s, subst_type s (List.hd_exn tys)
-  | ConstrExp (id, exp) ->
+  | ConstrExp id ->
       let vid, vty = (try Environment.lookup id varenv
                       with Environment.Not_bound -> err ("Unbound constr: " ^ id)) in
-      let s, ty = ty_exp tyenv varenv exp in
-      let s = unify s [(ty, vty)] in
-      s, TyVariant vid
+      (match vty with
+         TyEmpty -> IM.empty, TyVariant vid
+       | _ -> err ("The constructor " ^ vid ^ " expects some arguments"))
+  | ConstrAppExp (id, e) ->
+      let vid, vty = (try Environment.lookup id varenv
+                      with Environment.Not_bound -> err ("Unbound constr: " ^ id)) in
+      let s, ty = ty_exp tyenv varenv e in
+      unify s [vty, ty], TyVariant vid
 
 
 let rec ty_texp tylenv = function
@@ -405,6 +417,9 @@ let rec ty_texp tylenv = function
        with Environment.Not_bound -> err ("Unbound type constructor " ^ id))
   | TEFun (texp1, texp2) -> TyFun (ty_texp tylenv texp1, ty_texp tylenv texp2)
   | TETuple texps -> TyTuple (List.map texps ~f:(fun texp -> ty_texp tylenv texp))
+  | TEConstr (texp, id) when id = "list" -> TyList (ty_texp tylenv texp)
+  | TEEmpty -> TyEmpty
+  | _ -> err "error: ty_texp"
 
 
 let type_definition tyvenv varenv decls =

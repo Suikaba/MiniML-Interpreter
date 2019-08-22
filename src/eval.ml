@@ -72,7 +72,8 @@ let rec matching p v = match p, v with
                Some hd, Some tl -> Some (hd @ tl)
              | _ -> None))
       in inner ps vs
-  | PConstrExp (id1, p), VariantV (id2, v) when id1 = id2 -> matching p v
+  | PConstrExp id1, VariantV (id2, UnitV) when id1 = id2 -> Some []
+  | PConstrAppExp (id1, p), VariantV (id2, v) when id1 = id2 -> matching p v
   | PCombineExp ps, v ->
       let rec inner = (function
           [] -> None
@@ -183,7 +184,8 @@ let rec eval_exp env varenv = function
       (match inner mexps with
          Some v -> v
        | None -> err "Eval: matching error")
-  | ConstrExp (id, exp) -> VariantV (id, eval_exp env varenv exp)
+  | ConstrExp id -> VariantV (id, UnitV)
+  | ConstrAppExp (id, exp) -> VariantV (id, eval_exp env varenv exp)
 
 let eval_decl env varenv = function
     Exp e -> let v = eval_exp env varenv e in ([("-", v)], env)
