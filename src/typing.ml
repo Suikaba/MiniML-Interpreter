@@ -132,6 +132,7 @@ let rec pattern_variables = function
       vs
   | PConstrExp _ -> SS.empty
   | PConstrAppExp (_, p) -> pattern_variables p
+  | PPlaceholderExp -> SS.empty
   | PCombineExp ps ->
       let vss = List.map ps ~f:(fun p -> pattern_variables p) in
       let fst = List.hd_exn vss in
@@ -183,6 +184,7 @@ let rec ty_pattern penv varenv = function
                           with Environment.Not_bound -> raise_unbound_constr id) in
       let tyarg, eqs = ty_pattern penv varenv p in
       TyVariant var_id, (ty, tyarg) :: eqs
+  | PPlaceholderExp -> TyVar (fresh_tyvar ()), []
   | PCombineExp ps ->
       let ty1, eqs = ty_pattern penv varenv (List.hd_exn ps) in
       ty1,
@@ -418,6 +420,7 @@ let rec ty_texp tylenv = function
   | TEFun (texp1, texp2) -> TyFun (ty_texp tylenv texp1, ty_texp tylenv texp2)
   | TETuple texps -> TyTuple (List.map texps ~f:(fun texp -> ty_texp tylenv texp))
   | TEConstr (texp, id) when id = "list" -> TyList (ty_texp tylenv texp)
+  | TEConstr (texp, id) when id = "ref" -> TyRef (ty_texp tylenv texp)
   | TEEmpty -> TyEmpty
   | _ -> err "error: ty_texp"
 

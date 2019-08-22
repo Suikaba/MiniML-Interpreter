@@ -14,6 +14,7 @@ open Syntax
 %token BAR
 %token MATCH WITH
 %token TYPE OF
+%token PLACEHOLDER
 
 %token <int> INTV
 %token <Syntax.id> ID
@@ -182,6 +183,7 @@ APattern :
   | LPAREN RPAREN { PUnitLit }
   | LPAREN p=Pattern RPAREN { p }
   | p=ListPattern { p }
+  | PLACEHOLDER { PPlaceholderExp }
 
 ListPattern :
     LBOXBRA RBOXBRA { PListExp [] }
@@ -213,15 +215,15 @@ FunTypeExpr :
   | e=TupleTypeExpr { e }
 
 TupleTypeExpr :
-    e=ListTypeExpr MULT es=TupleTypeExprSeq { TETuple (e :: es) }
-  | e=ListTypeExpr { e }
+    e=ConstrTypeExpr MULT es=TupleTypeExprSeq { TETuple (e :: es) }
+  | e=ConstrTypeExpr { e }
 TupleTypeExprSeq :
-    e=ListTypeExpr { [e] }
-  | e=ListTypeExpr MULT es=TupleTypeExprSeq { e :: es }
+    e=ConstrTypeExpr { [e] }
+  | e=ConstrTypeExpr MULT es=TupleTypeExprSeq { e :: es }
 
-ListTypeExpr :
+ConstrTypeExpr :
     e=ATypeExpr { e }
-  | e=ListTypeExpr constr=ID { TEConstr (e, constr) }
+  | e=ConstrTypeExpr constr=ID { TEConstr (e, constr) }
 
 ATypeExpr :
     LPAREN e=TypeExpr RPAREN { e }

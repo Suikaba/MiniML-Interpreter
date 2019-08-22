@@ -74,6 +74,7 @@ let rec matching p v = match p, v with
       in inner ps vs
   | PConstrExp id1, VariantV (id2, UnitV) when id1 = id2 -> Some []
   | PConstrAppExp (id1, p), VariantV (id2, v) when id1 = id2 -> matching p v
+  | PPlaceholderExp, _ -> Some []
   | PCombineExp ps, v ->
       let rec inner = (function
           [] -> None

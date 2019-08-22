@@ -46,6 +46,7 @@ rule main = parse
 | "|" { Parser.BAR }
 | "::" { Parser.COLOCOLO }
 | "@" { Parser.APPEND }
+| "_" { Parser.PLACEHOLDER }
 
 | "(*" { comment lexbuf; main lexbuf }
 

@@ -17,6 +17,7 @@ type patternExp =
   | PListExp of patternExp list
   | PConstrExp of id
   | PConstrAppExp of id * patternExp
+  | PPlaceholderExp
   | PCombineExp of patternExp list
 
 type exp =
