@@ -15,6 +15,7 @@ and dnval = exval
 exception Error of string
 
 let err s = raise (Error s)
+let matching_error () = err "Eval: matching error"
 
 (* pretty printing *)
 let rec string_of_exval = function
@@ -125,7 +126,7 @@ let rec eval_exp env varenv = function
     let id_vals = List.map binds
                     ~f:(fun (p, e) -> match matching p (eval_exp env varenv e) with
                           Some l -> l
-                        | None -> err "Eval: matching error")
+                        | None -> matching_error ())
                   |> List.join in
     (* then, update environment *)
     let newenv = List.fold_left id_vals ~init:env
@@ -142,7 +143,7 @@ let rec eval_exp env varenv = function
                            Some l ->
                              List.fold_left l ~init:env
                                ~f:(fun env (id, v) -> Environment.extend id v env)
-                         | None -> err "Eval: matching error") in
+                         | None -> matching_error ()) in
       dummyenv := newenv;
       eval_exp newenv varenv exp2
   | FunExp (p, exp) -> ProcV (p, exp, ref env)
@@ -156,7 +157,7 @@ let rec eval_exp env varenv = function
                 let env = List.fold_left l ~init:!env'
                             ~f:(fun env (id, v) -> Environment.extend id v env) in
                 eval_exp env varenv body
-            | None -> err "Eval: matching error")
+            | None -> matching_error ())
        | _ -> err ("Non-function value is applied"))
   | UnitSeqExp (exp1, exp2) ->
       let _ = eval_exp env varenv exp1 in
@@ -184,7 +185,7 @@ let rec eval_exp env varenv = function
       in
       (match inner mexps with
          Some v -> v
-       | None -> err "Eval: matching error")
+       | None -> matching_error ())
   | ConstrExp id -> VariantV (id, UnitV)
   | ConstrAppExp (id, exp) -> VariantV (id, eval_exp env varenv exp)
 
@@ -195,7 +196,7 @@ let eval_decl env varenv = function
       let id_vals = List.map binds
                       ~f:(fun (p, e) -> match matching p (eval_exp env varenv e) with
                             Some l -> l
-                          | None -> err "Eval: matching error")
+                          | None -> matching_error ())
                     |> List.join in
       (* then, update environment *)
       let newenv = List.fold_left id_vals ~init:env
@@ -213,7 +214,7 @@ let eval_decl env varenv = function
                 Some l ->
                   List.fold_right l ~init:(id_vals, env)
                     ~f:(fun (id, v) (id_vals, env) -> (id, v) :: id_vals, Environment.extend id v env)
-              | None -> err "Eval: matching error") in
+              | None -> matching_error ()) in
       dummyenv := newenv;
       (id_vals, newenv)
   | TyDef _ -> ([], env) (* @todo *)

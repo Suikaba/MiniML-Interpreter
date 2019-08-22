@@ -2,8 +2,10 @@ open Core
 open Syntax
 
 exception Error of string
+exception TypeMismatch of ty * ty
 
 let err s = raise (Error s)
+let type_mismatch ty1 ty2 = raise (TypeMismatch (ty1, ty2))
 
 type tyenv = tysc Environment.t
 
@@ -82,12 +84,11 @@ let rec unify subst eqs =
       | TyFun (ty11, ty12), TyFun (ty21, ty22) ->
           unify subst ((ty11, ty21) :: (ty12, ty22) :: tl)
       | TyRef ty1, TyRef ty2 -> unify subst ((ty1, ty2) :: tl)
-      | TyTuple tys1, TyTuple tys2 ->
-          if (List.length tys1) <> (List.length tys2) then err "Type mismatch: Tuple";
+      | TyTuple tys1, TyTuple tys2 when List.length tys1 = List.length tys2 ->
           unify subst ((List.zip_exn tys1 tys2) @ tl)
       | TyList ty1, TyList ty2 -> unify subst ((ty1, ty2) :: tl)
       | TyVariant id1, TyVariant id2 when id1 = id2 -> unify subst tl
-      | _ -> err "Type mismatch")
+      | _ -> type_mismatch ty1 ty2)
     in
     (match ty1, ty2 with
      | TyVar v1, TyVar v2 ->

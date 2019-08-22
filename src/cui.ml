@@ -31,6 +31,11 @@ and read_file_eval_print fp ic env tyenv tyvenv varenv =
   with e -> In_channel.close fp; err_handler env tyenv tyvenv varenv e
 and err_handler env tyenv tyvenv varenv = function
   | Typing.Error msg -> print_endline msg; read_stdin_eval_print ~env:env ~tyenv:tyenv tyvenv varenv
+  | TypeMismatch (ty1, ty2) ->
+      let msg = Printf.sprintf "Error: This expression has type %s but an expression was expected of type %s"
+                  (string_of_ty ty1) (string_of_ty ty2) in
+      print_endline msg;
+      read_stdin_eval_print ~env:env ~tyenv:tyenv tyvenv varenv
   | Eval.Error msg -> print_endline msg; read_stdin_eval_print ~env:env ~tyenv:tyenv tyvenv varenv
   | Failure msg -> print_endline msg; read_stdin_eval_print ~env:env ~tyenv:tyenv tyvenv varenv
   | _ -> print_endline "Fatal error"; read_stdin_eval_print ~env:env ~tyenv:tyenv tyvenv varenv

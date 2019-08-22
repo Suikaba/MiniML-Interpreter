@@ -25,6 +25,10 @@
   - Variant ;
   - Pattern matching ; `let *pattern* = ...` , `match expr with ...`
 
+## Requirements
+- core
+- menhir
+- ounit
 
 ## Bulid and Test
 - `dune build` to build.
