@@ -11,6 +11,7 @@
   - List
   - Reference
   - Variant
+  - Record
   - let-polymorphism (value-restriction)
 
 - Expression
@@ -23,6 +24,7 @@
   - Tuple ; `e1, e2, ...`
   - List ; `[e1; e2; ...]`, `e1 :: tl` , `l1 @ l2`
   - Variant ;
+  - Record (`mutable` not supported)
   - Pattern matching ; `let *pattern* = ...` , `match expr with ...`
 
 ## Requirements

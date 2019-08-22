@@ -43,7 +43,10 @@ rule main = parse
 | "," { Parser.COMMA }
 | "[" { Parser.LBOXBRA }
 | "]" { Parser.RBOXBRA }
+| "{" { Parser.LBRACE }
+| "}" { Parser.RBRACE }
 | "|" { Parser.BAR }
+| ":" { Parser.COLON }
 | "::" { Parser.COLOCOLO }
 | "@" { Parser.APPEND }
 | "_" { Parser.PLACEHOLDER }

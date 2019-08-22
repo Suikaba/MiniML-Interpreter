@@ -5,19 +5,19 @@ open Miniml.Eval
 
 let if_test1 _ =
   let env, tyenv, tylenv, varenv = initial_env, initial_tyenv, initial_tyvenv, initial_varenv in
-  let id_ty_vals, _, _, _, _ = read_string_eval "if true then 1 else 2;;" env tyenv tylenv varenv in
+  let id_ty_vals, _, _, _, _, _ = read_string_eval "if true then 1 else 2;;" env tyenv tylenv varenv [] in
   assert_equal id_ty_vals [("-", TyInt, IntV 1)];
-  let id_ty_vals, _, _, _, _ = read_string_eval "if false then 1 else 2;;" env tyenv tylenv varenv in
+  let id_ty_vals, _, _, _, _, _ = read_string_eval "if false then 1 else 2;;" env tyenv tylenv varenv [] in
   assert_equal id_ty_vals [("-", TyInt, IntV 2)]
 
 let if_test2 _ =
   let env, tyenv, tylenv, varenv = initial_env, initial_tyenv, initial_tyvenv, initial_varenv in
-  let _, env, tyenv, _, _ = read_string_eval "let r1 = ref 0 and r2 = ref 0;;" env tyenv tylenv varenv in
-  let _, env, tyenv, _, _ = read_string_eval "if true then r1 := !r1 + 1 else r2 := !r2 + 1;;" env tyenv tylenv varenv in
-  let id_ty_vals, _, _, _, _ = read_string_eval "!r1, !r2;;" env tyenv tylenv varenv in
+  let _, env, tyenv, _, _, _ = read_string_eval "let r1 = ref 0 and r2 = ref 0;;" env tyenv tylenv varenv [] in
+  let _, env, tyenv, _, _, _ = read_string_eval "if true then r1 := !r1 + 1 else r2 := !r2 + 1;;" env tyenv tylenv varenv [] in
+  let id_ty_vals, _, _, _, _, _ = read_string_eval "!r1, !r2;;" env tyenv tylenv varenv [] in
   assert_equal id_ty_vals [("-", TyTuple [TyInt; TyInt], TupleV [IntV 1; IntV 0])];
-  let _, env, tyenv, _, _ = read_string_eval "if false then r1 := !r1 + 1 else r2 := !r2 + 1;;" env tyenv tylenv varenv in
-  let id_ty_vals, _, _, _, _ = read_string_eval "!r1, !r2;;" env tyenv tylenv varenv in
+  let _, env, tyenv, _, _, _ = read_string_eval "if false then r1 := !r1 + 1 else r2 := !r2 + 1;;" env tyenv tylenv varenv [] in
+  let id_ty_vals, _, _, _, _, _ = read_string_eval "!r1, !r2;;" env tyenv tylenv varenv [] in
   assert_equal id_ty_vals [("-", TyTuple [TyInt; TyInt], TupleV [IntV 1; IntV 1])]
 
 let suite =

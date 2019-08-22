@@ -15,6 +15,7 @@ open Syntax
 %token MATCH WITH
 %token TYPE OF
 %token PLACEHOLDER
+%token LBRACE RBRACE COLON
 
 %token <int> INTV
 %token <Syntax.id> ID
@@ -120,6 +121,7 @@ AExpr :
   | LPAREN e=Expr RPAREN { e }
   | e=InfixFunExpr { e }
   | e=ListExpr { e }
+  | e=RecordExpr { e }
 
 ListExpr :
     LBOXBRA RBOXBRA { ListExp [] }
@@ -132,6 +134,18 @@ ListSeqExpr : (* not include SeqExpr directly *)
   | l=LetExpr SEMI r=ListSeqExpr { l :: r }
   | l=FunExpr SEMI r=ListSeqExpr { l :: r }
   | l=IfExpr SEMI r=ListSeqExpr { l :: r }
+
+RecordExpr :
+   LBRACE fs=RecordFields RBRACE { RecordExp fs }
+
+RecordFields :
+   id=ID EQ e=RecordFieldExpr { [(id, e)] }
+ | id=ID EQ e=RecordFieldExpr SEMI { [(id, e)] }
+ | id=ID EQ e=RecordFieldExpr SEMI fs=RecordFields { (id, e) :: fs }
+RecordFieldExpr :
+   e=LetExpr { e }
+ | e=FunExpr { e }
+ | e=IfExpr { e }
 
 InfixFunExpr :
     LPAREN PLUS RPAREN { FunExp (PVar "x", FunExp (PVar "y", BinOp (Plus, Var "x", Var "y"))) }
@@ -148,7 +162,9 @@ FunArgsAndBody :
   | p=APattern e=FunArgsAndBody { FunExp (p, e) }
 
 
-(* Pattern *)
+(* =============================================================================
+ * Pattern
+ *)
 Pattern :
     p=TuplePattern { p }
   | p=TuplePattern BAR ps=CombinedPattern { PCombineExp (p :: ps) }
@@ -183,6 +199,7 @@ APattern :
   | LPAREN RPAREN { PUnitLit }
   | LPAREN p=Pattern RPAREN { p }
   | p=ListPattern { p }
+  | p=RecordPattern { p }
   | PLACEHOLDER { PPlaceholderExp }
 
 ListPattern :
@@ -191,6 +208,16 @@ ListPattern :
 ListPatternSeq :
     p=APattern { [p] }
   | p=APattern SEMI ps=ListPatternSeq { p :: ps }
+
+RecordPattern :
+    LBRACE ps=RecordPatternSeq RBRACE { PRecordExp ps }
+RecordPatternSeq :
+  | x=ID { [x, PNone] }
+  | x=ID SEMI { [x, PNone] }
+  | x=ID EQ p=Pattern { [x, p] }
+  | x=ID EQ p=Pattern SEMI { [x, p] }
+  | x=ID EQ p=Pattern SEMI ps=RecordPatternSeq { (x, p) :: ps }
+  | x=ID SEMI ps=RecordPatternSeq { (x, PNone) :: ps }
 
 MatchExpr :
     MATCH e=Expr WITH m=PatternMatching { MatchExp (e, m) }
@@ -206,7 +233,9 @@ PatternMatchingSeq :
   | BAR p=Pattern RARROW e=Expr ms=PatternMatchingSeq { (p, e) :: ms }
 
 
-(* Type expressions and type definitions *)
+(* =============================================================================
+ * Type expressions and type definitions
+ *)
 TypeExpr :
     e=FunTypeExpr { e }
 
@@ -231,25 +260,34 @@ ATypeExpr :
 
 TypeDefinition :
     TYPE id=ID EQ decl=ConstrDecl { [id, decl] }
+  | TYPE id=ID EQ decl=RecordDecl { [id, decl] }
   | TYPE id=ID EQ decl=ConstrDecl defs=AndTypeDefinition { (id, decl) :: defs }
+  | TYPE id=ID EQ decl=RecordDecl defs=AndTypeDefinition { (id, decl) :: defs }
 AndTypeDefinition :
     AND id=ID EQ decl=ConstrDecl { [id, decl] }
   | AND id=ID EQ decl=ConstrDecl defs=AndTypeDefinition { (id, decl) :: defs }
 
 ConstrDecl :
-    id=UpperCase { [id, TEEmpty] }
-  | id=UpperCase OF e=TypeExpr { [id, e] }
-  | BAR id=UpperCase { [id, TEEmpty] }
-  | BAR id=UpperCase OF e=TypeExpr { [id, e] }
-  | id=UpperCase OF e=TypeExpr decls=ConstrDeclSeq { (id, e) :: decls }
-  | id=UpperCase decls=ConstrDeclSeq { (id, TEEmpty) :: decls }
-  | BAR id=UpperCase OF e=TypeExpr decls=ConstrDeclSeq { (id, e) :: decls }
-  | BAR id=UpperCase decls=ConstrDeclSeq { (id, TEEmpty) :: decls }
+    id=UpperCase { TDVariant [id, TEEmpty] }
+  | id=UpperCase OF e=TypeExpr { TDVariant [id, e] }
+  | BAR id=UpperCase { TDVariant [id, TEEmpty] }
+  | BAR id=UpperCase OF e=TypeExpr { TDVariant [id, e] }
+  | id=UpperCase OF e=TypeExpr decls=ConstrDeclSeq { TDVariant ((id, e) :: decls) }
+  | id=UpperCase decls=ConstrDeclSeq { TDVariant ((id, TEEmpty) :: decls) }
+  | BAR id=UpperCase OF e=TypeExpr decls=ConstrDeclSeq { TDVariant ((id, e) :: decls) }
+  | BAR id=UpperCase decls=ConstrDeclSeq { TDVariant ((id, TEEmpty) :: decls) }
 ConstrDeclSeq :
     BAR id=UpperCase { [id, TEEmpty] }
   | BAR id=UpperCase OF e=TypeExpr { [id, e] }
   | BAR id=UpperCase decls=ConstrDeclSeq { (id, TEEmpty) :: decls }
   | BAR id=UpperCase OF e=TypeExpr decls=ConstrDeclSeq { (id, e) :: decls }
+
+RecordDecl :
+    LBRACE fs=FieldDecl RBRACE { TDRecord fs }
+FieldDecl :
+    id=ID COLON e=TypeExpr { [id, e] }
+  | id=ID COLON e=TypeExpr SEMI { [id, e] }
+  | id=ID COLON e=TypeExpr SEMI fs=FieldDecl { (id, e) :: fs }
 
 UpperCase :
     id=UPPERCASE { match id with UpperId id -> id }

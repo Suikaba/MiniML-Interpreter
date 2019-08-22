@@ -7,6 +7,7 @@
          let_rec_test
          ref_test
          variant_test
+         record_test
          matching_test
          unionfind_test)
 )

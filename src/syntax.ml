@@ -18,7 +18,9 @@ type patternExp =
   | PConstrExp of id
   | PConstrAppExp of id * patternExp
   | PPlaceholderExp
+  | PRecordExp of (id * patternExp) list
   | PCombineExp of patternExp list
+  | PNone
 
 type exp =
     Var of id
@@ -39,6 +41,7 @@ type exp =
   | MatchExp of exp * (patternExp * exp) list
   | ConstrExp of id
   | ConstrAppExp of id * exp
+  | RecordExp of (id * exp) list
 
 type typeExp =
     TEVar of id
@@ -46,12 +49,17 @@ type typeExp =
   | TETuple of typeExp list
   | TEConstr of typeExp * id
   | TEEmpty
+  | TERecord of (id * typeExp) list
+
+type tyDeclExp =
+    TDVariant of (id * typeExp) list
+  | TDRecord of (id * typeExp) list
 
 type program =
     Exp of exp
   | Decl of (patternExp * exp) list
   | RecDecl of (patternExp * exp) list
-  | TyDef of (id * ((id * typeExp) list)) list
+  | TyDef of (id * tyDeclExp) list
 
 type tyvar = int
 type ty =
@@ -65,6 +73,7 @@ type ty =
   | TyTuple of ty list
   | TyVariant of id
   | TyEmpty (* for variant without arguments *)
+  | TyRecord of id
 
 type tysc = TyScheme of tyvar list * ty
 
@@ -91,6 +100,7 @@ let rec string_of_ty = function
   | TyList ty -> (string_of_ty ty) ^ " list"
   | TyVariant id -> id
   | TyEmpty -> "empty"
+  | TyRecord id -> id
 
 let pp_ty ty = print_string (string_of_ty ty)
 
@@ -108,6 +118,7 @@ let rec freevar_ty = function
   | TyList ty -> freevar_ty ty
   | TyVariant _ -> ST.empty
   | TyEmpty -> ST.empty
+  | TyRecord _ -> ST.empty
 
 let freevar_tysc tysc =
   let rec freevar_tysc_impl binds = (function
@@ -118,7 +129,8 @@ let freevar_tysc tysc =
     | TyTuple tys -> List.fold_right tys ~init:ST.empty ~f:(fun ty fv -> ST.union fv (freevar_tysc_impl binds ty))
     | TyList ty -> freevar_tysc_impl binds ty
     | TyVariant _ -> ST.empty
-    | TyEmpty -> ST.empty)
+    | TyEmpty -> ST.empty
+    | TyRecord _ -> ST.empty)
   in
   match tysc with
   | TyScheme (binds, ty) -> freevar_tysc_impl binds ty
