@@ -1,5 +1,7 @@
 # MiniML Interpreter
 
+[![Build Status](https://travis-ci.org/Suikaba/MiniML-Interpreter.svg?branch=master)](https://travis-ci.org/Suikaba/MiniML-Interpreter)
+
 ## Feature
 
 - Types
