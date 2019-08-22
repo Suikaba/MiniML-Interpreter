@@ -2,6 +2,7 @@
 open Core
 
 type id = string
+type upperId = UpperId of string
 
 type binOp = Plus | Minus | Mult | Div | Lt | And | Or | Eq | Assign
              | Cons | Append
@@ -14,6 +15,7 @@ type patternExp =
   | PTupleExp of patternExp list
   | PConsExp of patternExp list
   | PListExp of patternExp list
+  | PConstrExp of id * patternExp
   | PCombineExp of patternExp list
 
 type exp =
@@ -33,23 +35,18 @@ type exp =
   | TupleExp of exp list
   | ListExp of exp list
   | MatchExp of exp * (patternExp * exp) list
+  | ConstrExp of id * exp
 
-(* for value restriction *)
-let rec is_value_exp = function
-  | UnitLit -> true
-  | ILit _ -> true
-  | FunExp _ -> true
-  | BLit _ -> true
-  | LetExp (_, exp) -> is_value_exp exp
-  | LetRecExp (_, exp) -> is_value_exp exp
-  | TupleExp exps
-  | ListExp exps -> List.for_all exps ~f:(fun e -> is_value_exp e)
-  | _ -> false
+type typeExp =
+    TEVar of id
+  | TEFun of typeExp * typeExp
+  | TETuple of typeExp list
 
 type program =
     Exp of exp
   | Decl of (patternExp * exp) list
   | RecDecl of (patternExp * exp) list
+  | TyDef of (id * ((id * typeExp) list)) list
 
 type tyvar = int
 type ty =
@@ -61,6 +58,7 @@ type ty =
   | TyList of ty
   | TyRef of ty
   | TyTuple of ty list
+  | TyVariant of id
 
 type tysc = TyScheme of tyvar list * ty
 
@@ -85,6 +83,7 @@ let rec string_of_ty = function
                        | _ -> string_of_ty ty)
       |> String.concat ~sep:" * "
   | TyList ty -> (string_of_ty ty) ^ " list"
+  | TyVariant id -> id
 
 let pp_ty ty = print_string (string_of_ty ty)
 
@@ -100,6 +99,7 @@ let rec freevar_ty = function
   | TyRef ty -> freevar_ty ty
   | TyTuple tys -> List.fold_right tys ~init:ST.empty ~f:(fun ty fv -> ST.union fv (freevar_ty ty))
   | TyList ty -> freevar_ty ty
+  | TyVariant _ -> ST.empty
 
 let freevar_tysc tysc =
   let rec freevar_tysc_impl binds = (function
@@ -108,10 +108,24 @@ let freevar_tysc tysc =
     | TyFun (ty1, ty2) -> ST.union (freevar_tysc_impl binds ty1) (freevar_tysc_impl binds ty2)
     | TyRef ty -> freevar_tysc_impl binds ty
     | TyTuple tys -> List.fold_right tys ~init:ST.empty ~f:(fun ty fv -> ST.union fv (freevar_tysc_impl binds ty))
-    | TyList ty -> freevar_tysc_impl binds ty)
+    | TyList ty -> freevar_tysc_impl binds ty
+    | TyVariant _ -> ST.empty)
   in
   match tysc with
   | TyScheme (binds, ty) -> freevar_tysc_impl binds ty
+
+(* for value restriction *)
+let rec is_value_exp = function
+  | UnitLit -> true
+  | ILit _ -> true
+  | FunExp _ -> true
+  | BLit _ -> true
+  | LetExp (_, exp) -> is_value_exp exp
+  | LetRecExp (_, exp) -> is_value_exp exp
+  | TupleExp exps
+  | ListExp exps -> List.for_all exps ~f:(fun e -> is_value_exp e)
+  | _ -> false
+
 
 (* helper functions for parser *)
 

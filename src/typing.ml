@@ -22,6 +22,7 @@ let print_eqs s =
   List.iter s ~f:(fun (ty1, ty2) -> pp_ty ty1; print_string " = "; pp_ty ty2)
 
 let err_recursive_ftv () = err "unify: recursive FTV (@todo: better error message)"
+let raise_unbound_constr constr = err ("Unbound constructor " ^ constr)
 
 let rec freevar_tyenv tyenv =
   Environment.fold_right
@@ -84,6 +85,7 @@ let rec unify subst eqs =
           if (List.length tys1) <> (List.length tys2) then err "Type mismatch: Tuple";
           unify subst ((List.zip_exn tys1 tys2) @ tl)
       | TyList ty1, TyList ty2 -> unify subst ((ty1, ty2) :: tl)
+      | TyVariant id1, TyVariant id2 when id1 = id2 -> unify subst tl
       | _ -> err "Type mismatch")
     in
     (match ty1, ty2 with
@@ -127,6 +129,7 @@ let rec pattern_variables = function
       in
       if SS.length vs <> sum then err "Variable is bound several times in this matching";
       vs
+  | PConstrExp (_, p) -> pattern_variables p
   | PCombineExp ps ->
       let vss = List.map ps ~f:(fun p -> pattern_variables p) in
       let fst = List.hd_exn vss in
@@ -134,7 +137,7 @@ let rec pattern_variables = function
                                     err "Variable must occur on both sudes of this | pattern");
       fst
 
-let rec ty_pattern penv = function
+let rec ty_pattern penv varenv = function
     PVar v -> SM.find_exn penv v, []
   | PUnitLit -> TyUnit, []
   | PILit _ -> TyInt, []
@@ -142,19 +145,19 @@ let rec ty_pattern penv = function
   | PTupleExp ps ->
       let tys, eqs = List.fold_right ps ~init:([], [])
                        ~f:(fun p (tys, eqs) ->
-                             let ty, eqs' = ty_pattern penv p in
+                             let ty, eqs' = ty_pattern penv varenv p in
                              (ty :: tys, eqs' @ eqs)) in
      TyTuple tys, eqs
   | PConsExp ps ->
       assert ((List.length ps) >= 2);
-      let ty1, eqs1 = ty_pattern penv (List.hd_exn ps) in
+      let ty1, eqs1 = ty_pattern penv varenv (List.hd_exn ps) in
       let rec inner = (function
           [] -> err "ty_pattern, inner: Never reach"
         | [p] ->
-            let tl_ty, eqs' = ty_pattern penv p in
+            let tl_ty, eqs' = ty_pattern penv varenv p in
             (TyList ty1, tl_ty) :: eqs' @ eqs1
         | p :: ps ->
-            let ty', eqs' = ty_pattern penv p in
+            let ty', eqs' = ty_pattern penv varenv p in
             (ty1, ty') :: eqs' @ inner ps)
      in
      TyList ty1, inner (List.tl_exn ps)
@@ -162,19 +165,24 @@ let rec ty_pattern penv = function
       (match ps with
          [] -> TyVar (fresh_tyvar ()), []
        | p :: ps ->
-           let ty1, eqs1 = ty_pattern penv p in
+           let ty1, eqs1 = ty_pattern penv varenv p in
            let eqs = List.fold_left ps ~init:eqs1
                        ~f:(fun eqs p ->
-                             let ty', eqs' = ty_pattern penv p in
+                             let ty', eqs' = ty_pattern penv varenv p in
                              (ty1, ty') :: eqs' @ eqs)
            in
            TyList ty1, eqs)
+  | PConstrExp (id, p) ->
+      let (var_id, ty) = (try Environment.lookup id varenv
+                          with Environment.Not_bound -> raise_unbound_constr id) in
+      let p_ty, eqs = ty_pattern penv varenv p in
+      TyVariant var_id, (ty, p_ty) :: eqs
   | PCombineExp ps ->
-      let ty1, eqs = ty_pattern penv (List.hd_exn ps) in
+      let ty1, eqs = ty_pattern penv varenv (List.hd_exn ps) in
       ty1,
       List.fold_left (List.tl_exn ps) ~init:eqs
         ~f:(fun eqs p ->
-              let ty', eqs' = ty_pattern penv p in
+              let ty', eqs' = ty_pattern penv varenv p in
               (ty1, ty') :: eqs' @ eqs)
 
 
@@ -197,8 +205,11 @@ let check_let_rec binds =
     | AppExp (exp1, exp2) -> (inner name exp1) || (inner name exp2)
     | UnitSeqExp (exp1, exp2) -> (inner name exp1) || (inner name exp2)
     | TupleExp exps -> List.exists ~f:(fun e -> inner name e) exps
+    | RefExp exp -> inner name exp
+    | DerefExp exp -> inner name exp
+    | ConstrExp (_, exp) -> inner name exp
     | ListExp exps -> List.exists ~f:(fun e -> inner name e) exps
-    | _ -> err "check_let_rec: Not implemented"
+    | MatchExp _ -> err "Not implemented"
   in
   let is_invalid = List.map binds ~f:(fun (p, _) -> pattern_variables p |> SS.to_list)
                    |> List.join
@@ -230,7 +241,7 @@ let ty_prim op ty1 ty2 = match op with
       let ty_alpha = TyVar (fresh_tyvar ()) in
       [(ty1, TyList ty_alpha); (ty2, TyList ty_alpha)], TyList ty_alpha
 
-let rec ty_exp tyenv = function
+let rec ty_exp tyenv varenv = function
     Var x ->
       (try
          let TyScheme (vars, ty) = Environment.lookup x tyenv in
@@ -243,15 +254,15 @@ let rec ty_exp tyenv = function
   | BLit _ -> (IM.empty, TyBool)
   | UnitLit -> (IM.empty, TyUnit)
   | BinOp (op, exp1, exp2) ->
-      let (s1, tyarg1) = ty_exp tyenv exp1 in
-      let (s2, tyarg2) = ty_exp tyenv exp2 in
+      let (s1, tyarg1) = ty_exp tyenv varenv exp1 in
+      let (s2, tyarg2) = ty_exp tyenv varenv exp2 in
       let (eqs, tyans) = ty_prim op tyarg1 tyarg2 in
       let s = unify (merge_subst s1 s2) eqs in
       (s, subst_type s tyans)
   | IfExp (exp1, exp2, exp3) ->
-      let (s1, tytest) = ty_exp tyenv exp1 in
-      let (s2, ty2) = ty_exp tyenv exp2 in
-      let (s3, ty3) = ty_exp tyenv exp3 in
+      let (s1, tytest) = ty_exp tyenv varenv exp1 in
+      let (s2, ty2) = ty_exp tyenv varenv exp2 in
+      let (s3, ty3) = ty_exp tyenv varenv exp3 in
       if tytest <> TyBool then err "test expression must be of boolean: if";
       let newsubst = unify (merge_subst s1 (merge_subst s2 s3)) [(tytest, TyBool); (ty2, ty3)] in
       (newsubst, subst_type newsubst ty2)
@@ -260,11 +271,11 @@ let rec ty_exp tyenv = function
       let (s1, newtyenv) =
         List.fold_left binds ~init:(IM.empty, tyenv)
           ~f:(fun (s, env') (p, exp1) ->
-                let s', ty = ty_exp tyenv exp1 in
+                let s', ty = ty_exp tyenv varenv exp1 in
                 let penv = SS.to_list (pattern_variables p)
                            |> List.map ~f:(fun id -> id, TyVar (fresh_tyvar ()))
                            |> SM.of_alist_exn in
-                let p_ty, eqs = ty_pattern penv p in
+                let p_ty, eqs = ty_pattern penv varenv p in
                 let s' = unify s' ((p_ty, ty) :: eqs) in
                 let TyScheme (xs, _) =
                   if is_value_exp exp1 then
@@ -279,7 +290,7 @@ let rec ty_exp tyenv = function
                 in
                 (merge_subst s s', newtyenv))
       in
-      let (s2, tyans) = ty_exp newtyenv exp2 in
+      let (s2, tyans) = ty_exp newtyenv varenv exp2 in
       let newsubst = merge_subst s1 s2 in
       (newsubst, subst_type newsubst tyans)
   | LetRecExp (binds, exp2) ->
@@ -294,8 +305,8 @@ let rec ty_exp tyenv = function
       in
       let (p_tys, s1) = List.fold_left binds ~init:([], IM.empty)
                            ~f:(fun (p_tys', s') (p, exp) ->
-                                 let (s'', ty'') = ty_exp tmpenv exp in
-                                 let p_ty, eqs = ty_pattern penv p in
+                                 let (s'', ty'') = ty_exp tmpenv varenv exp in
+                                 let p_ty, eqs = ty_pattern penv varenv p in
                                  ((p, ty'', is_value_exp exp) :: p_tys',
                                   unify (merge_subst s' s'') ((ty'', p_ty) :: eqs)))
       in
@@ -310,41 +321,41 @@ let rec ty_exp tyenv = function
                 |> List.fold_left ~init:env
                      ~f:(fun env id ->
                            Environment.extend id (TyScheme (xs, subst_type s1 (SM.find_exn penv id))) env)) in
-      let (s2, tyans) = ty_exp newtyenv exp2 in
+      let (s2, tyans) = ty_exp newtyenv varenv exp2 in
       let s = merge_subst s1 s2 in
       (s, subst_type s tyans)
   | FunExp (p, exp) ->
       let penv = pattern_variables p |> SS.to_list
                  |> List.map ~f:(fun id -> id, TyVar (fresh_tyvar ()))
                  |> SM.of_alist_exn in
-      let p_ty, eqs = ty_pattern penv p in
+      let p_ty, eqs = ty_pattern penv varenv p in
       let tyenv = SM.fold penv ~init:tyenv
                        ~f:(fun ~key:id ~data:ty tyenv ->
                              Environment.extend id (tysc_of_ty ty) tyenv) in
-      let s, ranty = ty_exp tyenv exp in
+      let s, ranty = ty_exp tyenv varenv exp in
       let s = unify s eqs in
       (s, TyFun (subst_type s p_ty, ranty))
   | AppExp (exp1, exp2) ->
-      let (s1, tyf) = ty_exp tyenv exp1 in
-      let (s2, tyarg) = ty_exp tyenv exp2 in
+      let (s1, tyf) = ty_exp tyenv varenv exp1 in
+      let (s2, tyarg) = ty_exp tyenv varenv exp2 in
       let tybody = TyVar (fresh_tyvar ()) in
       let newsubst = unify (merge_subst s1 s2) [(tyf, TyFun (tyarg, tybody))] in
       (newsubst, subst_type newsubst tybody)
   | UnitSeqExp (exp1, exp2) ->
-      let (s1, ty1) = ty_exp tyenv exp1 in
+      let (s1, ty1) = ty_exp tyenv varenv exp1 in
       if ty1 <> TyUnit then print_endline "Warning: this expression should have type unit.";
-      let (s2, ty2) = ty_exp tyenv exp2 in
+      let (s2, ty2) = ty_exp tyenv varenv exp2 in
       (merge_subst s1 s2, ty2)
   | RefExp _ -> err "ty_exp: input expression has RefExp"
   | DerefExp exp ->
-      let s, ty = ty_exp tyenv exp in
+      let s, ty = ty_exp tyenv varenv exp in
       let tyvar = TyVar (fresh_tyvar ()) in
       let newsubst = unify s [(ty, TyRef tyvar)] in
       (newsubst, subst_type newsubst tyvar)
   | TupleExp exps ->
       let s, tys = List.fold_right exps ~init:(IM.empty, [])
                      ~f:(fun e (s, tys) ->
-                           let s', ty = ty_exp tyenv e in
+                           let s', ty = ty_exp tyenv varenv e in
                            (merge_subst s s', ty :: tys))
       in
       (s, TyTuple (List.map tys ~f:(fun ty -> subst_type s ty)))
@@ -352,64 +363,109 @@ let rec ty_exp tyenv = function
       (match exps with
          [] -> (IM.empty, TyList (TyVar (fresh_tyvar ())))
        | exps ->
-           let s1, ty1 = ty_exp tyenv (List.hd_exn exps) in
+           let s1, ty1 = ty_exp tyenv varenv (List.hd_exn exps) in
            let s, eqs = List.fold_left (List.tl_exn exps) ~init:(s1, [])
                           ~f:(fun (s', eqs') e ->
-                                let s'', ty'' = ty_exp tyenv e in
+                                let s'', ty'' = ty_exp tyenv varenv e in
                                 (merge_subst s' s'', (ty1, ty'') :: eqs')) in
            let s = unify s eqs in
            (s, TyList (subst_type s ty1)))
   | MatchExp (e, mexps) ->
-      let s, ty = ty_exp tyenv e in
+      let s, ty = ty_exp tyenv varenv e in
       let tys = List.map mexps
                   ~f:(fun (p, exp) ->
                         let penv = pattern_variables p |> SS.to_list
                                    |> List.map ~f:(fun id -> id, (TyVar (fresh_tyvar ())))
                                    |> SM.of_alist_exn
                         in
-                        let p_ty, eqs = ty_pattern penv p in
+                        let p_ty, eqs = ty_pattern penv varenv p in
                         let s = unify s ((p_ty, ty) :: eqs) in
                         let tyenv = SM.to_alist penv
                                     |> List.fold_left ~init:tyenv
                                          ~f:(fun tyenv (id, ty) ->
                                                Environment.extend id (tysc_of_ty (subst_type s ty)) tyenv)
                         in
-                        let s', ty' = ty_exp tyenv exp in
+                        let s', ty' = ty_exp tyenv varenv exp in
                         subst_type (merge_subst s s') ty')
       in
       let s = List.map (List.tl_exn tys) ~f:(fun ty -> ty, List.hd_exn tys)
               |> unify s in
-      (s, subst_type s (List.hd_exn tys))
+      s, subst_type s (List.hd_exn tys)
+  | ConstrExp (id, exp) ->
+      let vid, vty = (try Environment.lookup id varenv
+                      with Environment.Not_bound -> err ("Unbound constr: " ^ id)) in
+      let s, ty = ty_exp tyenv varenv exp in
+      let s = unify s [(ty, vty)] in
+      s, TyVariant vid
 
-let ty_decl tyenv decl =
+
+let rec ty_texp tylenv = function
+    TEVar id ->
+      (try Environment.lookup id tylenv
+       with Environment.Not_bound -> err ("Unbound type constructor " ^ id))
+  | TEFun (texp1, texp2) -> TyFun (ty_texp tylenv texp1, ty_texp tylenv texp2)
+  | TETuple texps -> TyTuple (List.map texps ~f:(fun texp -> ty_texp tylenv texp))
+
+
+let type_definition tyvenv varenv decls =
+  let rec check_multiple names = (function
+    | [] -> ()
+    | (name, constrs) :: tl ->
+        if List.mem names name ~equal:String.equal then
+          err ("Multiple definition of the type name " ^ name);
+        let rec check_constr_multiple names = (function
+          | [] -> ()
+          | (name, _) :: tl ->
+              if List.mem names name ~equal:String.equal then
+                err ("Error: two constructors are named " ^ name);
+              check_constr_multiple (name :: names) tl)
+        in
+        check_constr_multiple [] constrs;
+        check_multiple (name :: names) tl)
+  in
+  check_multiple [] decls;
+  let tyvenv = List.fold_left decls ~init:tyvenv
+                 ~f:(fun tyenv (id, _) -> Environment.extend id (TyVariant id) tyenv) in
+  let varenv = List.fold_left decls ~init:varenv
+                 ~f:(fun varenv (name, id_texps) ->
+                       List.fold_left id_texps ~init:varenv
+                         ~f:(fun varenv (id, texp) ->
+                               Environment.extend id (name, (ty_texp tyvenv texp)) varenv))
+  in
+  tyvenv, varenv
+
+let ty_decl tyenv tyvenv varenv decl =
   let inner tyenv = (function
       Exp e ->
-        let s, ty = ty_exp tyenv e in
-        (s, ["-", ty], tyenv)
+        let s, ty = ty_exp tyenv varenv e in
+        (s, ["-", ty], tyenv, tyvenv, varenv)
     | Decl binds ->
         check_bound_several_times binds;
-        List.fold_left ~init:(IM.empty, [], tyenv) binds
-          ~f:(fun (s', id_tys, tyenv) (p, exp) ->
-                let s, ty = ty_exp tyenv exp in
-                let penv = pattern_variables p |> SS.to_list
-                           |> List.map ~f:(fun id -> id, TyVar (fresh_tyvar ()))
-                           |> SM.of_alist_exn in
-                let p_ty, eqs = ty_pattern penv p in
-                let TyScheme (xs, _) =
-                  if is_value_exp exp then
-                    make_closure ~ty:ty ~tyenv:tyenv ~subst:s
-                  else
-                    tysc_of_ty ty
-                in
-                let s = unify (merge_subst s s') ((ty, p_ty) :: eqs) in
-                let id_tys, newtyenv =
-                  SM.to_alist penv
-                  |> List.fold_right ~init:(id_tys, tyenv)
-                        ~f:(fun (id, ty) (id_tys, env') ->
-                              (id, subst_type s ty) :: id_tys,
-                               Environment.extend id (TyScheme (xs, subst_type s ty)) env')
-                in
-                (s, id_tys, newtyenv))
+        let (s, id_tys, tyenv) =
+          List.fold_left ~init:(IM.empty, [], tyenv) binds
+            ~f:(fun (s', id_tys, tyenv) (p, exp) ->
+                  let s, ty = ty_exp tyenv varenv exp in
+                  let penv = pattern_variables p |> SS.to_list
+                             |> List.map ~f:(fun id -> id, TyVar (fresh_tyvar ()))
+                             |> SM.of_alist_exn in
+                  let p_ty, eqs = ty_pattern penv varenv p in
+                  let TyScheme (xs, _) =
+                    if is_value_exp exp then
+                      make_closure ~ty:ty ~tyenv:tyenv ~subst:s
+                    else
+                      tysc_of_ty ty
+                  in
+                  let s = unify (merge_subst s s') ((ty, p_ty) :: eqs) in
+                  let id_tys, newtyenv =
+                    SM.to_alist penv
+                    |> List.fold_right ~init:(id_tys, tyenv)
+                          ~f:(fun (id, ty) (id_tys, env') ->
+                                (id, subst_type s ty) :: id_tys,
+                                 Environment.extend id (TyScheme (xs, subst_type s ty)) env')
+                  in
+                  (s, id_tys, newtyenv))
+        in
+        s, id_tys, tyenv, tyvenv, varenv
     | RecDecl binds ->
         check_bound_several_times binds;
         check_let_rec binds;
@@ -421,8 +477,8 @@ let ty_decl tyenv decl =
         in
         let p_tys, s = List.fold_left binds ~init:([], IM.empty)
                          ~f:(fun (p_tys, s) (p, exp) ->
-                               let s', ty' = ty_exp tmpenv exp in
-                               let p_ty, eqs = ty_pattern penv p in
+                               let s', ty' = ty_exp tmpenv varenv exp in
+                               let p_ty, eqs = ty_pattern penv varenv p in
                                ((p, ty', is_value_exp exp) :: p_tys,
                                 unify (merge_subst s s') ((ty', p_ty) :: eqs)))
         in
@@ -440,9 +496,12 @@ let ty_decl tyenv decl =
                              Environment.extend id (TyScheme (xs, subst_type s (SM.find_exn penv id))) tyenv))
         in
         let id_tys = SM.map penv ~f:(fun ty -> subst_type s ty) |> SM.to_alist in
-        (s, id_tys, tyenv))
+        (s, id_tys, tyenv, tyvenv, varenv)
+    | TyDef decls ->
+        let tyvenv, varenv = type_definition tyvenv varenv decls in
+        IM.empty, [], tyenv, tyvenv, varenv (* todo *))
   in
-  let s, id_tys, tyenv = inner tyenv decl in
+  let s, id_tys, tyenv, tyvenv, varenv = inner tyenv decl in
   (* update tyenv for weak type variables *)
-  let newtyenv = Environment.map (fun (TyScheme (xs, ty)) -> TyScheme (xs, subst_type s ty)) tyenv in
-  (id_tys, newtyenv)
+  let tyenv = Environment.map (fun (TyScheme (xs, ty)) -> TyScheme (xs, subst_type s ty)) tyenv in
+  (id_tys, tyenv, tyvenv, varenv)

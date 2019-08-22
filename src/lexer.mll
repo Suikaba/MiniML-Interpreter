@@ -13,6 +13,8 @@ let reservedWords = [
   ("rec", Parser.REC);
   ("match", Parser.MATCH);
   ("with", Parser.WITH);
+  ("type", Parser.TYPE);
+  ("of", Parser.OF);
 ]
 }
 
@@ -54,6 +56,10 @@ rule main = parse
       with
       _ -> Parser.ID id
      }
+| ['A'-'Z'] ['A'-'Z' 'a'-'z' '0'-'9' '_' '\'']*
+    { let id = Lexing.lexeme lexbuf in
+      Parser.UPPERCASE (Syntax.UpperId id)
+    }
 | eof { exit 0 }
 
 and comment = parse

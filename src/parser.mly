@@ -13,9 +13,11 @@ open Syntax
 %token LBOXBRA RBOXBRA COLOCOLO APPEND
 %token BAR
 %token MATCH WITH
+%token TYPE OF
 
 %token <int> INTV
 %token <Syntax.id> ID
+%token <Syntax.upperId> UPPERCASE
 
 %start toplevel
 %type <Syntax.program> toplevel
@@ -25,6 +27,7 @@ toplevel :
     e=Expr SEMISEMI { Exp e }
   | LET bs=LetBindings SEMISEMI { Decl bs }
   | LET REC bs=LetBindings SEMISEMI { RecDecl bs }
+  | defs=TypeDefinition SEMISEMI { TyDef defs }
 
 LetBindings :
   | p=Pattern EQ e=Expr { [(p, e)] }
@@ -99,6 +102,7 @@ MExpr :
 
 AppExpr :
     e1=AppExpr e2=DerefExpr { AppExp (e1, e2) }
+  | constr=UpperCase e2=DerefExpr { ConstrExp (constr, e2) }
   | e=DerefExpr { e }
 
 DerefExpr :
@@ -141,6 +145,8 @@ FunArgsAndBody :
     p=Pattern RARROW e=Expr { FunExp (p, e) }
   | p=Pattern e=FunArgsAndBody { FunExp (p, e) }
 
+
+(* Pattern *)
 Pattern :
     p=TuplePattern { p }
   | p=TuplePattern BAR ps=CombinedPattern { PCombineExp (p :: ps) }
@@ -156,11 +162,15 @@ TuplePatternSeq :
   | p=ConsPattern COMMA ps=TuplePatternSeq { p :: ps }
 
 ConsPattern :
-    p=APattern { p }
-  | p=APattern COLOCOLO ps=ConsPatternSeq { PConsExp (p :: ps) }
+    p=ConstrPattern { p }
+  | p=ConstrPattern COLOCOLO ps=ConsPatternSeq { PConsExp (p :: ps) }
 ConsPatternSeq :
-    p=APattern { [p] }
-  | p=APattern COLOCOLO ps=ConsPatternSeq { p :: ps }
+    p=ConstrPattern { [p] }
+  | p=ConstrPattern COLOCOLO ps=ConsPatternSeq { p :: ps }
+
+ConstrPattern :
+    constr=UpperCase p=APattern { PConstrExp (constr, p) }
+  | p=APattern { p }
 
 APattern :
     i=ID { PVar i }
@@ -190,3 +200,42 @@ PatternMatching :
 PatternMatchingSeq :
     BAR p=Pattern RARROW e=Expr { [p, e] }
   | BAR p=Pattern RARROW e=Expr ms=PatternMatchingSeq { (p, e) :: ms }
+
+
+(* Type expressions and type definitions *)
+TypeExpr :
+    e=FunTypeExpr { e }
+
+FunTypeExpr :
+    l=FunTypeExpr RARROW r=TupleTypeExpr { TEFun (l, r) }
+  | e=TupleTypeExpr { e }
+
+TupleTypeExpr :
+    e=ATypeExpr MULT es=TupleTypeExprSeq { TETuple (e :: es) }
+  | e=ATypeExpr { e }
+TupleTypeExprSeq :
+    e=ATypeExpr { [e] }
+  | e=ATypeExpr MULT es=TupleTypeExprSeq { e :: es }
+
+ATypeExpr :
+    LPAREN e=TypeExpr RPAREN { e }
+  | id=ID { TEVar id }
+
+TypeDefinition :
+    TYPE id=ID EQ decl=ConstrDecl { [id, decl] }
+  | TYPE id=ID EQ decl=ConstrDecl defs=AndTypeDefinition { (id, decl) :: defs }
+AndTypeDefinition :
+    AND id=ID EQ decl=ConstrDecl { [id, decl] }
+  | AND id=ID EQ decl=ConstrDecl defs=AndTypeDefinition { (id, decl) :: defs }
+
+ConstrDecl :
+    id=UpperCase OF e=TypeExpr { [id, e] }
+  | BAR id=UpperCase OF e=TypeExpr { [id, e] }
+  | id=UpperCase OF e=TypeExpr decls=ConstrDeclSeq { (id, e) :: decls }
+  | BAR id=UpperCase OF e=TypeExpr decls=ConstrDeclSeq { (id, e) :: decls }
+ConstrDeclSeq :
+    BAR id=UpperCase OF e=TypeExpr { [id, e] }
+  | BAR id=UpperCase OF e=TypeExpr decls=ConstrDeclSeq { (id, e) :: decls }
+
+UpperCase :
+    id=UPPERCASE { match id with UpperId id -> id }
